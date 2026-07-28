@@ -17,6 +17,7 @@ set(src  AnimationExportChoiceDialog.cpp
          CharDetailsFrame.cpp
          ClientChoiceDialog.cpp
          ColorPickerDialog.cpp
+         DarkTheme.cpp
          DisplaySettings.cpp
          effects.cpp
          ExportJobManager.cpp
@@ -57,6 +58,7 @@ set(headers AnimationExportChoiceDialog.h
             CharDetailsFrame.h
             ClientChoiceDialog.h
             ColorPickerDialog.h
+            DarkTheme.h
             DisplaySettings.h
             effects.h
             enums.h

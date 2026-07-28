@@ -7,17 +7,20 @@ project(WoWModelViewer)
 # both stay buildable from the same tree.
 if(CMAKE_GENERATOR_PLATFORM STREQUAL "x64")
   set(WMV_X64 ON)
-  set(WMV_VCPKG_X64 "C:/Users/Rasmus Lund/vcpkg/installed/x64-windows")
+  # vcpkg location. Override on the command line with -DWMV_VCPKG_ROOT=<path/to/vcpkg>;
+  # defaults to the original hardcoded developer path so existing setups keep building.
+  set(WMV_VCPKG_ROOT "C:/Users/Rasmus Lund/vcpkg" CACHE PATH "Root of the vcpkg checkout")
+  set(WMV_VCPKG_X64 "${WMV_VCPKG_ROOT}/installed/x64-windows")
   # static GLEW (libglew32.lib, /MD CRT) -- avoids the dynamic import-lib symbol mismatch; matches
   # the proven 32-bit static-GLEW setup.
-  set(WMV_VCPKG_X64_STATIC "C:/Users/Rasmus Lund/vcpkg/installed/x64-windows-static-md")
+  set(WMV_VCPKG_X64_STATIC "${WMV_VCPKG_ROOT}/installed/x64-windows-static-md")
 endif()
 
-# Qt5
+# Qt5. Override with -DQT_LOCATION=<path> if Qt is not under C:/Qt.
 if(WMV_X64)
-  SET(QT_LOCATION C:/Qt/5.13.2/msvc2017_64)
+  SET(QT_LOCATION "C:/Qt/5.13.2/msvc2017_64" CACHE PATH "Qt5 installation to build against")
 else()
-  SET(QT_LOCATION C:/Qt/5.13.2/msvc2017)
+  SET(QT_LOCATION "C:/Qt/5.13.2/msvc2017" CACHE PATH "Qt5 installation to build against")
 endif()
 SET(CMAKE_PREFIX_PATH ${QT_LOCATION}/lib/cmake)
 find_package(Qt5 5.13.2 COMPONENTS Core Network Widgets Xml Gui REQUIRED)

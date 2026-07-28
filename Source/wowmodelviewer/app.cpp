@@ -15,6 +15,7 @@
 #include <windows.h>
 
 #include "ClientChoiceDialog.h"
+#include "DarkTheme.h"
 #include "ExporterPlugin.h"
 #include "Game.h"
 #include "GameFolder.h" // core::GameConfig

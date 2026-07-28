@@ -280,6 +280,9 @@ ModelViewer::ModelViewer()
     // The primary frame and all panes now exist, so apply the shared palette in
     // one pass. wxWidgets 3.2 has no global window-created event to hook.
     DarkTheme::ApplyToWindow(this);
+    // Second pass for the bits that are drawn by Windows rather than by wx --
+    // the title bar and the scrollbars inside the file tree and item lists.
+    DarkTheme::ApplyNativeDarkMode(this);
 
     // Are these really needed?
     Refresh();
