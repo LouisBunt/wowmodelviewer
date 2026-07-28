@@ -32,7 +32,7 @@ ClientChoiceDialog::ClientChoiceDialog(wxWindow * parent)
   : wxDialog(parent, wxID_ANY, wxT("Client Choice"), wxDefaultPosition, wxDefaultSize),
     m_folder(0), m_detected(0), m_product(0), m_profile(0), m_load(0), m_legacyMpq(false)
 {
-  const wxString initialRoot = rootOf(gamePath);
+  const wxString initialRoot = rootOf(toWx(gamePath));
   buildUI(initialRoot);
   populateProfiles();
 

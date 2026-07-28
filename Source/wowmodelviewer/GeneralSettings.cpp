@@ -55,8 +55,8 @@ GeneralSettings::GeneralSettings(wxWindow* parent, wxWindowID id)
   wxString policies[2] = {_("Use game files"), _("Use custom files")};
 
   keepPolicyRadioBox = new wxRadioBox(this, -1, _("Conflict policy"), wxDefaultPosition, wxDefaultSize, 2, policies, 2);
-  gamePathDisplay =  new wxTextCtrl(this, wxID_ANY, gamePath, wxDefaultPosition, wxSize(300,-1), wxTE_READONLY);
-  wxString customMsg = customDirectoryPath;
+  gamePathDisplay =  new wxTextCtrl(this, wxID_ANY, toWx(gamePath), wxDefaultPosition, wxSize(300,-1), wxTE_READONLY);
+  wxString customMsg = toWx(customDirectoryPath);
   if (customMsg.IsEmpty())
     customMsg = wxString(_("Select a folder..."));
   customDirectoryPathDisplay =  new wxTextCtrl(this, wxID_ANY, customMsg, wxDefaultPosition, wxSize(300,-1), wxTE_READONLY);
@@ -131,11 +131,11 @@ void GeneralSettings::Update()
   chkbox[CHECK_SHOWPARTICLE]->SetValue(GLOBALSETTINGS.bShowParticle);
   chkbox[CHECK_ZEROPARTICLE]->SetValue(GLOBALSETTINGS.bZeroParticle);
   chkbox[CHECK_DISPLAYIDINLIST]->SetValue(displayItemAndNPCId);
-  gamePathDisplay->SetValue(gamePath);
-  if (customDirectoryPath.IsEmpty())
+  gamePathDisplay->SetValue(toWx(gamePath));
+  if (customDirectoryPath.isEmpty())
     customDirectoryPathDisplay->SetValue(_("Select a folder..."));
   else
-    customDirectoryPathDisplay->SetValue(customDirectoryPath);
+    customDirectoryPathDisplay->SetValue(toWx(customDirectoryPath));
   keepPolicyRadioBox->SetSelection(customFilesConflictPolicy);
   armoryProxyURLCtrl->SetValue(wxString::FromUTF8(GLOBALSETTINGS.armoryProxyURL().c_str()));
   newGamePath = wxEmptyString;
@@ -156,13 +156,13 @@ void GeneralSettings::OnButton(wxCommandEvent &event)
     }
     if (newCustomFolder == wxString(_T("ERASE")))
     {
-      if (customDirectoryPath != wxEmptyString)
+      if (!customDirectoryPath.isEmpty())
         settingsChanged = true;
-      customDirectoryPath = wxEmptyString;
+      customDirectoryPath.clear();
     }
-    else if(!newCustomFolder.IsEmpty() && customDirectoryPath !=  newCustomFolder)
+    else if(!newCustomFolder.IsEmpty() && customDirectoryPath != fromWx(newCustomFolder))
     {
-      customDirectoryPath = newCustomFolder;
+      customDirectoryPath = fromWx(newCustomFolder);
       settingsChanged = true;
     }
     if(customFilesConflictPolicy != keepPolicyRadioBox->GetSelection())
@@ -206,7 +206,7 @@ void GeneralSettings::OnButton(wxCommandEvent &event)
   else if (id == ID_FIND_CUSTOM_FOLDER)
   {
     wxDirDialog *customDirPicker = new wxDirDialog(this, _("Select the folder containing your custom files."), 
-                                                   customDirectoryPath, 0);
+                                                   toWx(customDirectoryPath), 0);
     int i = customDirPicker->ShowModal();
     if (i != wxID_OK)
       return;

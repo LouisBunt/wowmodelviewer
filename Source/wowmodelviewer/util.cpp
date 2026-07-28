@@ -11,11 +11,11 @@
 
 #include "UserSkins.h"
 
-wxString gamePath;
-wxString cfgPath;
-wxString bgImagePath;
-wxString armoryPath;
-wxString customDirectoryPath;
+QString gamePath;
+QString cfgPath;
+QString bgImagePath;
+QString armoryPath;
+QString customDirectoryPath;
 int customFilesConflictPolicy = 0;
 int displayItemAndNPCId = 0;
 
@@ -25,13 +25,13 @@ UserSkins& gUserSkins = userSkins;
 bool useRandomLooks = true;
 
 long langID = -1;
-wxString langName;
+QString langName;
 long langOffset = -1;
 long interfaceID = 0;
 int ssCounter = 100; // ScreenShot Counter
 int imgFormat = 0;
 
-wxString locales[] = {wxT("enUS"), wxT("koKR"), wxT("frFR"), wxT("deDE"), wxT("zhCN"), wxT("zhTW"), wxT("esES"), wxT("esMX"), wxT("ruRU")};
+QString locales[] = {"enUS", "koKR", "frFR", "deDE", "zhCN", "zhTW", "esES", "esMX", "ruRU"};
 
 // Round a float, down to the specified decimal
 float round(float input, int limit = 2){
@@ -94,7 +94,7 @@ wxString getGamePath(bool noSet)
   
   if (folder == wxEmptyString || folder == wxString(L"Other"))
   {
-    folder = gamePath;
+    folder = toWx(gamePath);
     if (folder == wxEmptyString)
       folder = wxT("C:\\Program Files\\World of Warcraft\\");
     newPath = wxDirSelector(wxT("Please select your World of Warcraft folder:"), folder);

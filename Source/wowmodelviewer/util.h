@@ -22,11 +22,22 @@
 
 using namespace std;
 
-extern wxString gamePath;
-extern wxString cfgPath;
-extern wxString bgImagePath;
-extern wxString armoryPath;
-extern wxString customDirectoryPath;
+// Bridges for the remaining wx call sites. The process-wide path/locale globals below
+// are QString (they are handed to core/wow, which are Qt-based), but the surrounding
+// GUI is still wxWidgets. These two helpers keep the conversions in one place instead
+// of scattering .c_str()/fromWCharArray gymnastics; they disappear along with the wx
+// front-end.
+inline wxString toWx(const QString& s) { return wxString(s.toStdWString()); }
+inline QString fromWx(const wxString& s) { return QString::fromWCharArray(s.wc_str()); }
+
+// These are process-wide and are handed straight to core/wow, which are Qt-based.
+// Keeping them as QString removes the wxString <-> QString conversion dance at every
+// boundary (the old code went through .c_str() and QString::fromWCharArray).
+extern QString gamePath;
+extern QString cfgPath;
+extern QString bgImagePath;
+extern QString armoryPath;
+extern QString customDirectoryPath;
 extern int customFilesConflictPolicy;
 extern int displayItemAndNPCId;
 
@@ -36,20 +47,22 @@ class UserSkins;
 extern UserSkins& gUserSkins;
 
 extern long langID;
-extern wxString langName;
+extern QString langName;
 extern long langOffset;
 extern long interfaceID;
 extern int ssCounter;
 extern int imgFormat;
 extern long versionID;
 
-extern wxString locales[];
+extern QString locales[];
 
-// Slashes for Pathing
+// Slashes for Pathing.
+// Plain char rather than wxT(): this macro is also used by the FBX exporter plugin,
+// which should not have to pull in wxWidgets just for a path separator.
 #ifdef _WINDOWS
-  #define SLASH wxT('\\')
+  #define SLASH '\\'
 #else
-  #define SLASH wxT('/')
+  #define SLASH '/'
 #endif
 
 float frand();

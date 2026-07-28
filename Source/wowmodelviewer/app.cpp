@@ -79,10 +79,10 @@ void WowModelViewApp::setInterfaceLocale()
   // This chunk of code is all related to locale translation (if a translation is available).
   // Only use locale for non-english?
   wxString fn;
-  fn.Printf(wxT("localisation%c%s.mo"), SLASH, locales[0].c_str());
+  fn.Printf(wxT("localisation%c%s.mo"), SLASH, toWx(locales[0]));
 
   if (interfaceID >= 0)
-    fn.Printf(wxT("localisation%c%s.mo"), SLASH, locales[interfaceID].c_str());
+    fn.Printf(wxT("localisation%c%s.mo"), SLASH, toWx(locales[interfaceID]));
 
   if (wxFileExists(fn))
   {
@@ -92,7 +92,7 @@ void WowModelViewApp::setInterfaceLocale()
     //wxLocale::AddCatalogLookupPathPrefix(wxT(".."));
 
     //locale.AddCatalog(wxT("wowmodelview")); // Initialize the catalogs we'll be using
-    locale.AddCatalog(locales[interfaceID]);
+    locale.AddCatalog(toWx(locales[interfaceID]));
   }
 #endif
 }
@@ -558,7 +558,7 @@ bool WowModelViewApp::OnInit()
     }
     else if (cmd == "-dbfromfile") {
       LOG_INFO << "Read database from file";
-      core::Game::instance().init(new wow::WoWFolder(QString::fromWCharArray(gamePath.c_str())), new wow::WoWDatabase());
+      core::Game::instance().init(new wow::WoWFolder(gamePath), new wow::WoWDatabase());
       GAMEDATABASE.setFastMode();
     }
     else if (cmd == "-console") {
@@ -826,7 +826,7 @@ void WowModelViewApp::OnUnhandledException()
 
 void WowModelViewApp::LoadSettings()
 {
-  QSettings config(QString::fromWCharArray(cfgPath.c_str()), QSettings::IniFormat);
+  QSettings config(cfgPath, QSettings::IniFormat);
 
   // graphic settings
   video.curCap.aaSamples = config.value("Graphics/FSAA", 0).toInt();
@@ -843,12 +843,12 @@ void WowModelViewApp::LoadSettings()
 
   // Application locale info
   langID = config.value("Locale/LanguageID", 1).toInt();
-  langName = config.value("Locale/LanguageName", "").toString().toStdWString();
+  langName = config.value("Locale/LanguageName", "").toString();
 
   // Application settings
-  gamePath = config.value("Settings/Path", "").toString().toStdWString();
-  armoryPath = config.value("Settings/ArmoryPath", "").toString().toStdWString();
-  customDirectoryPath = config.value("Settings/CustomDirPath", "").toString().toStdWString();
+  gamePath = config.value("Settings/Path", "").toString();
+  armoryPath = config.value("Settings/ArmoryPath", "").toString();
+  customDirectoryPath = config.value("Settings/CustomDirPath", "").toString();
   customFilesConflictPolicy = config.value("Settings/CustomFilesConflictPolicy", 0).toInt();
   displayItemAndNPCId = config.value("Settings/displayItemAndNPCId", 0).toInt();
   ssCounter = config.value("Settings/SSCounter", 100).toInt();
@@ -866,14 +866,14 @@ void WowModelViewApp::LoadSettings()
 void WowModelViewApp::SaveSettings()
 {
   // Application Config Settings
-  QSettings config(QString::fromWCharArray(cfgPath.c_str()), QSettings::IniFormat);
+  QSettings config(cfgPath, QSettings::IniFormat);
 
   config.setValue("Locale/LanguageID", langID);
-  config.setValue("Locale/LanguageName", QString::fromWCharArray(langName.c_str()));
+  config.setValue("Locale/LanguageName", langName);
 
-  config.setValue("Settings/Path", QString::fromWCharArray(gamePath.c_str()));
-  config.setValue("Settings/ArmoryPath", QString::fromWCharArray(armoryPath.c_str()));
-  config.setValue("Settings/CustomDirPath", QString::fromWCharArray(customDirectoryPath.c_str()));
+  config.setValue("Settings/Path", gamePath);
+  config.setValue("Settings/ArmoryPath", armoryPath);
+  config.setValue("Settings/CustomDirPath", customDirectoryPath);
   config.setValue("Settings/CustomFilesConflictPolicy", customFilesConflictPolicy);
   config.setValue("Settings/displayItemAndNPCId", displayItemAndNPCId);
   config.setValue("Settings/SSCounter", ssCounter);

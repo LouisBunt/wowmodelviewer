@@ -785,9 +785,9 @@ void ModelViewer::ResetLayout()
 
 void ModelViewer::LoadSession()
 {
-  LOG_INFO << "Loading Session settings from:" << QString::fromWCharArray(cfgPath.c_str());
+  LOG_INFO << "Loading Session settings from:" << cfgPath;
 
-  QSettings config(QString::fromWCharArray(cfgPath.c_str()), QSettings::IniFormat);
+  QSettings config(cfgPath, QSettings::IniFormat);
 
   // Application Config Settings
   useRandomLooks = config.value("Session/RandomLooks", true).toBool();
@@ -822,16 +822,16 @@ void ModelViewer::LoadSession()
 
     // boolean vars
     canvas->drawBackground = config.value("Session/DBackground", false).toBool();
-    bgImagePath = config.value("Session/BackgroundImage", false).toString().toStdWString();
+    bgImagePath = config.value("Session/BackgroundImage", false).toString();
 
-    if (!bgImagePath.IsEmpty())
-      canvas->LoadBackground(bgImagePath);
+    if (!bgImagePath.isEmpty())
+      canvas->LoadBackground(toWx(bgImagePath));
   }
 }
 
 void ModelViewer::SaveSession()
 {
-  QSettings config(QString::fromWCharArray(cfgPath.c_str()), QSettings::IniFormat);
+  QSettings config(cfgPath, QSettings::IniFormat);
 
   config.setValue("Graphics/FSAA", video.curCap.aaSamples);
   config.setValue("Graphics/AccumulationBuffer", video.curCap.accum);
@@ -897,7 +897,7 @@ void ModelViewer::SaveSession()
     config.setValue("Session/DBackground", canvas->drawBackground);
 
     if (canvas->drawBackground)
-      config.setValue("Session/BackgroundImage", QString::fromWCharArray(bgImagePath.c_str()));
+      config.setValue("Session/BackgroundImage", bgImagePath);
     else
       config.setValue("Session/BackgroundImage", "");
 
@@ -909,7 +909,7 @@ void ModelViewer::SaveSession()
 
 void ModelViewer::LoadLayout()
 {
-  QSettings config(QString::fromWCharArray(cfgPath.c_str()), QSettings::IniFormat);
+  QSettings config(cfgPath, QSettings::IniFormat);
 
   int posx = config.value("Session/PositionX", "").toInt();
   int posy = config.value("Session/PositionY", "").toInt();
@@ -975,7 +975,7 @@ void ModelViewer::LoadLayout()
 
 void ModelViewer::SaveLayout()
 {
-  QSettings config(QString::fromWCharArray(cfgPath.c_str()), QSettings::IniFormat);
+  QSettings config(cfgPath, QSettings::IniFormat);
 
   config.setValue("Session/Layout", QString::fromWCharArray(interfaceManager.SavePerspective().c_str()));
 
@@ -1603,10 +1603,10 @@ void ModelViewer::OnToggleCommand(wxCommandEvent &event)
 
     case ID_IMPORT_CHAR:
     {
-      wxTextEntryDialog dialog(this, wxT("Please paste in the URL to the character you wish to import."), wxT("Please enter text"), armoryPath, wxOK | wxCANCEL | wxCENTRE, wxDefaultPosition);
+      wxTextEntryDialog dialog(this, wxT("Please paste in the URL to the character you wish to import."), wxT("Please enter text"), toWx(armoryPath), wxOK | wxCANCEL | wxCENTRE, wxDefaultPosition);
       if (dialog.ShowModal() == wxID_OK){
         armoryPath = dialog.GetValue();
-        ImportArmoury(armoryPath);
+        ImportArmoury(toWx(armoryPath));
       }
     }
     break;
@@ -1842,7 +1842,7 @@ void ModelViewer::OnViewLog(wxCommandEvent &event)
 {
   int ID = event.GetId();
   if (ID == ID_FILE_VIEWLOG) {
-    wxString logPath = cfgPath.BeforeLast(SLASH) + SLASH + wxT("log.txt");
+    wxString logPath = toWx(cfgPath.left(cfgPath.lastIndexOf(SLASH))) + SLASH + wxT("log.txt");
 #ifdef  _WINDOWS
     wxExecute(wxT("notepad.exe ") + logPath);
 #elif  _MAC
@@ -2106,7 +2106,7 @@ int ModelViewer::PromptAndLoadLegacyMpqClient()
   // Persist the chosen folder for next launch (also written in SaveSession).
   m_lastMpqFolder = qpath;
   {
-    QSettings config(QString::fromWCharArray(cfgPath.c_str()), QSettings::IniFormat);
+    QSettings config(cfgPath, QSettings::IniFormat);
     config.setValue("Session/LastMpqFolder", m_lastMpqFolder);
   }
 
@@ -2138,7 +2138,7 @@ void ModelViewer::OnLoadLegacyMpq(wxCommandEvent & WXUNUSED(event))
 void ModelViewer::LoadWoW(const core::GameConfig * chosenConfig, const QString & profileOverride, bool showProgress)
 {
   fileControl->Disable();
-  if (gamePath.IsEmpty() || !wxDirExists(gamePath)) {
+  if (gamePath.isEmpty() || !wxDirExists(toWx(gamePath))) {
     getGamePath();
   }
 
@@ -2147,7 +2147,7 @@ void ModelViewer::LoadWoW(const core::GameConfig * chosenConfig, const QString &
   // reusing it would fail. Retail->Retail reuse is unchanged (initDone && storage==CASC -> skip).
   if (!core::Game::instance().initDone()
       || GAMEDIRECTORY.clientProfile().storage == core::StorageType::MPQ)
-    core::Game::instance().init(new wow::WoWFolder(QString::fromWCharArray(gamePath.c_str())), new wow::WoWDatabase());
+    core::Game::instance().init(new wow::WoWFolder(gamePath), new wow::WoWDatabase());
 
   core::GameConfig config;
 
@@ -2316,7 +2316,7 @@ void ModelViewer::LoadWoW(const core::GameConfig * chosenConfig, const QString &
   // init game version
   SetStatusText(wxString(GAMEDIRECTORY.version().toStdWString()), 1);
 
-  langName = GAMEDIRECTORY.locale().toStdWString();
+  langName = GAMEDIRECTORY.locale();
 
   SetStatusText(wxString(GAMEDIRECTORY.locale().toStdWString()), 2);
 
@@ -2385,8 +2385,8 @@ void ModelViewer::LoadWoW(const core::GameConfig * chosenConfig, const QString &
   GAMEDIRECTORY.initFromListfile("../../../listfile.csv");
   GAMEDIRECTORY.setLoadProgressCallback(std::function<void(float)>()); // clear
 
-  if (!customDirectoryPath.IsEmpty())
-    core::Game::instance().addCustomFiles(QString::fromWCharArray(customDirectoryPath.c_str()), customFilesConflictPolicy);
+  if (!customDirectoryPath.isEmpty())
+    core::Game::instance().addCustomFiles(customDirectoryPath, customFilesConflictPolicy);
 
   // init database
   if (progress) progress->step(_("Opening database..."), 80);
@@ -2509,7 +2509,7 @@ void ModelViewer::OnMount(wxCommandEvent &event)
 
 void ModelViewer::OnSave(wxCommandEvent &event)
 {
-  static wxFileName dir = cfgPath;
+  static wxFileName dir = toWx(cfgPath);
 
   if (!canvas || (!canvas->model() && !canvas->wmo))
     return;
@@ -2588,7 +2588,7 @@ void ModelViewer::OnSave(wxCommandEvent &event)
 
 void ModelViewer::OnBackground(wxCommandEvent &event)
 {
-  static wxFileName dir = cfgPath;
+  static wxFileName dir = toWx(cfgPath);
 
   int id = event.GetId();
 
