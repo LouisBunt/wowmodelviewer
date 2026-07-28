@@ -11,12 +11,10 @@
 
 #include "GL/glew.h"
 
-extern const size_t MAX_LIGHTS;
-
-// default colour values
-const static glm::vec4 def_ambience = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-const static glm::vec4 def_diffuse = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-const static glm::vec4 def_specular = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+// default colour values -- now shared with the widget-free lighting code
+const static glm::vec4 def_ambience = SceneLighting::defaultAmbience;
+const static glm::vec4 def_diffuse = SceneLighting::defaultDiffuse;
+const static glm::vec4 def_specular = SceneLighting::defaultSpecular;
 
 // Inhereit class event table from wxWindow
 IMPLEMENT_CLASS(LightControl, wxWindow)
@@ -174,35 +172,8 @@ void LightControl::Init()
   //LOG_INFO << "Max Lights Supported:" << maxlights;
   LOG_INFO << "Max Lights used:" << MAX_LIGHTS;
 
-  if (!lights)
-    return;
-
-  // Set default values.
-  for (size_t i=0; i<MAX_LIGHTS; i++) {
-    lights[i].ambience = def_ambience;
-    lights[i].diffuse = def_diffuse;
-    lights[i].specular = def_specular;
-    //lights[i].colour = glm::vec3(1.0f, 1.0f, 1.0f);
-    lights[i].pos = glm::vec4(0.0f, 0.2f, 1.0f, 1.0f);
-    lights[i].target = glm::vec4(0.0f, -1.0f, 0.0f, 1.0f);
-    lights[i].enabled = false;
-    lights[i].relative = false;
-    lights[i].type = LIGHT_DIRECTIONAL;
-    lights[i].constant_int = 1.0f;
-    lights[i].linear_int = 0.0f;
-    lights[i].quadradic_int = 0.0f;
-    lights[i].arc = 90.0f;
-  }
-
-  // Turn on the first light by default
-  lights[0].enabled = true;
-  glEnable(GL_LIGHT0);
-  glLightfv(GL_LIGHT0, GL_DIFFUSE, glm::value_ptr(lights[0].diffuse));
-  glLightfv(GL_LIGHT0, GL_AMBIENT, glm::value_ptr(lights[0].ambience));
-  glLightfv(GL_LIGHT0, GL_SPECULAR, glm::value_ptr(lights[0].specular));
-  glLightfv(GL_LIGHT0, GL_POSITION, glm::value_ptr(lights[0].pos));
-
-  Update();
+  SceneLighting::reset(lights);
+  Update();   // sync the panel's controls with the freshly seeded values
 }
 
 void LightControl::SetColour()
@@ -568,40 +539,7 @@ void LightControl::Update()
 
 void LightControl::UpdateGL()
 {
-  float tar[3] = {0.0f, -1.0f, 0.0f};
-  // Update the lighting
-  for (size_t i=0; i<MAX_LIGHTS; i++) {
-    GLuint lightID = GL_LIGHT0 + (GLuint)i;
-
-    if (lights[i].enabled)
-      glEnable(lightID);
-    else
-      glDisable(lightID);
-
-    glLightfv(GL_LIGHT0+activeLight, GL_DIFFUSE, glm::value_ptr(lights[i].diffuse));
-    glLightfv(GL_LIGHT0+activeLight, GL_AMBIENT, glm::value_ptr(lights[i].ambience));
-    glLightfv(GL_LIGHT0+activeLight, GL_SPECULAR, glm::value_ptr(lights[i].specular));
-    glLightfv(GL_LIGHT0+activeLight, GL_POSITION, glm::value_ptr(lights[i].pos));
-
-    glLightf(lightID, GL_CONSTANT_ATTENUATION, 1.0f);
-    glLightf(lightID, GL_LINEAR_ATTENUATION, 0.0f);
-    glLightf(lightID, GL_QUADRATIC_ATTENUATION, 0.0f);
-    glLightf(lightID, GL_SPOT_CUTOFF, 180.0f);
-
-    glLightfv(lightID, GL_SPOT_DIRECTION, tar);
-
-    if (lights[i].type == LIGHT_POSITIONAL) {
-      glLightf(lightID, GL_CONSTANT_ATTENUATION, lights[activeLight].constant_int);
-      glLightf(lightID, GL_LINEAR_ATTENUATION, lights[activeLight].linear_int);
-      glLightf(lightID, GL_QUADRATIC_ATTENUATION, lights[activeLight].quadradic_int);
-
-    } else if(lights[activeLight].type == LIGHT_SPOT) {
-      //glLightf(lightID, GL_SPOT_EXPONENT, 8.0f);            // This seems to have no effect?
-      glLightf(lightID, GL_SPOT_CUTOFF, lights[i].arc);      // Lighting arc
-      glLightfv(lightID, GL_SPOT_DIRECTION, glm::value_ptr(lights[i].target));  // Lighting target
-
-    }  
-  }
+  SceneLighting::apply(lights, activeLight);
 }
 
 // --

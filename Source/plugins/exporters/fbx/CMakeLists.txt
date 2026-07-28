@@ -11,7 +11,6 @@ if(WMV_X64)
   include_directories(BEFORE ${CMAKE_SOURCE_DIR}/ThirdParty/fbx_x64/include)
 endif()
 include_directories(${CMAKE_SOURCE_DIR}/ThirdParty/include)
-include_directories(${CMAKE_SOURCE_DIR}/Source/wowmodelviewer) # needed for util.h inclusion
 
 set(src FBXExporter.cpp
   FBXAnimExporter.cpp
@@ -42,7 +41,8 @@ else()
   set(FBX_SDK_DLL ${CMAKE_SOURCE_DIR}/ThirdParty/lib/libfbxsdk.dll)
 endif()
 
-target_link_libraries(${NAME} Qt5::Core ${extralibs} ${FBX_SDK_LIB} ${wxWidgets_LIBRARIES})
+# No wxWidgets: this plugin is Qt + FBX SDK only.
+target_link_libraries(${NAME} Qt5::Core ${extralibs} ${FBX_SDK_LIB})
 
 set(BIN_DIR "${CMAKE_SOURCE_DIR}/bin/plugins/")
 

@@ -14,30 +14,10 @@
 // Vector types
 #include "util.h"
 
-// OpenGL only supports a maximum of 8 lights without using extensions.
-// I'm not sure if the specs were changed in OGL 2.0
-const size_t MAX_LIGHTS = 4;
-
-//intensity distribution of the spotlight with GL_SPOT_EXPONENT
-
-struct Light {
-  bool enabled;  // Is the light on/off?
-  bool relative;  // Is the light relative to the model? yes/no
-  unsigned short type;  // type: 0 = positional, 1 = spot, 2 = directional
-
-  float arc;    // The arc angle of degrees for the light
-
-  float constant_int; // The intensity of the light/colour, also affects the 'focus' of the light. 0.0 being constant (even) lighting
-  float linear_int; // light linear quadradic
-  float quadradic_int; // light intensity quadradic
-
-  glm::vec4 pos;    // the position, positional (w > 0) or directional (w = 0)
-  glm::vec4 target;  // the position the lighting is directed at.
-  //glm::vec3 colour;  // not needed?
-  glm::vec4 diffuse;  // The colour
-  glm::vec4 ambience;  // the colour of the ambience
-  glm::vec4 specular;  // colour of specular lighting
-};
+// MAX_LIGHTS, Light and the GL application live in games/wow now, so the renderer
+// can light a scene without a widget being around. This panel is the editor on top
+// of that data, nothing more.
+#include "SceneLighting.h"
 
 class LightControl: public wxWindow
 {

@@ -310,11 +310,8 @@ enum {
   LIGHT_MODEL_ONLY
 };
 
-enum {
-  LIGHT_POSITIONAL,
-  LIGHT_SPOT,
-  LIGHT_DIRECTIONAL
-};
+// LIGHT_POSITIONAL / LIGHT_SPOT / LIGHT_DIRECTIONAL moved to
+// games/wow/SceneLighting.h, next to the Light struct they describe.
 
 
 enum {

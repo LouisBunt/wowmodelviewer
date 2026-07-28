@@ -40,6 +40,14 @@
 // Other libraries
 #include "WoWModel.h"
 
+// Path separator. Defined here rather than pulled in from the GUI's util.h, which
+// would drag wxWidgets into this plugin for nothing but this one character.
+#ifdef _WINDOWS
+  #define SLASH '\\'
+#else
+  #define SLASH '/'
+#endif
+
 // Current library
 
 

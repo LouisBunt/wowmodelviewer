@@ -47,7 +47,6 @@
 #include "ModelRenderPass.h"
 #include "WoWModel.h"
 
-#include "util.h" // SLASH
 
 // Current library
 
