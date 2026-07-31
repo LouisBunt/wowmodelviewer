@@ -634,6 +634,64 @@ bool WDC3File::close()
   return WDB5File::close();
 }
 
+// How many bytes a declared field occupies inside a sparse record, per element.
+static size_t sparseWidthOf(const QString & type)
+{
+  if (type == "uint64")                    return 8;
+  if (type == "int8"  || type == "uint8")  return 1;
+  if (type == "int16" || type == "uint16") return 2;
+  return 4;                                // int32, uint32, float
+}
+
+// Where the field declared at `fieldPos` really begins inside a sparse record.
+//
+// Sparse records store their fields inline and back to back, strings included, so nothing
+// after the first string sits at the offset m_fieldStorageInfo reports -- those offsets
+// describe fixed-size records. Reading ItemSparse.ExpansionID through them yielded values
+// in the +-2e9 range instead of 0..11. The only way to find such a field is to walk
+// everything in front of it, which is why every preceding field has to be declared even
+// when nobody wants its value (see FieldStructure::store).
+//
+// The loop runs f <= fieldPos over fields[] on purpose, matching the string walk it
+// generalises: fields[] carries the non-inline key at index 0, which shifts every later
+// entry by one against the record positions. That holds as long as a table declares its
+// key first and the remaining fields in ascending pos order.
+unsigned char * WDC3File::sparseFieldPtr(unsigned char * recordOffset,
+                                         const core::TableStructure * structure,
+                                         int fieldPos) const
+{
+  const char * bufStart = reinterpret_cast<const char *>(m_sectionData);
+  const char * bufEnd = bufStart + m_sectionDataSize;
+  unsigned char * ptr = recordOffset;
+
+  for (int f = 0; f <= fieldPos && f < static_cast<int>(structure->fields.size()); f++)
+  {
+    const core::FieldStructure * fs = structure->fields[f];
+    if (fs->isKey)
+      continue;                       // non-inline id: not part of the record at all
+
+    if (fs->type == "text")
+    {
+      for (unsigned int a = 0; a < fs->arraySize; a++)
+      {
+        const char * s = reinterpret_cast<const char *>(ptr);
+        if (s < bufStart || s >= bufEnd)
+          return nullptr;
+        ptr += strnlen(s, static_cast<size_t>(bufEnd - s)) + 1;
+      }
+    }
+    else
+    {
+      ptr += sparseWidthOf(fs->type) * fs->arraySize;
+    }
+
+    if (reinterpret_cast<const char *>(ptr) > bufEnd)
+      return nullptr;
+  }
+
+  return ptr;
+}
+
 std::vector<std::string> WDC3File::get(unsigned int recordIndex, const core::TableStructure * structure) const
 {
   std::vector<std::string> result;
@@ -642,6 +700,11 @@ std::vector<std::string> WDC3File::get(unsigned int recordIndex, const core::Tab
   for (auto it : structure->fields)
   {
     wow::FieldStructure * field = dynamic_cast<wow::FieldStructure *>(it);
+
+    // Declared purely so the sparse walk above can step over it. It has no column, so it
+    // must contribute no value either -- the INSERT is built from the stored fields only.
+    if (!field->store)
+      continue;
 
     if (field->isKey)
     {
@@ -665,7 +728,27 @@ std::vector<std::string> WDC3File::get(unsigned int recordIndex, const core::Tab
     for (uint i = 0; i < field->arraySize; i++)
     {
       unsigned int val = 0;
-      if (!readFieldValue(recordIndex, field->pos, i, field->arraySize, val))
+      bool haveValue = false;
+
+      // Sparse records need the inline walk; the storage-info offsets only describe
+      // fixed-size records and give nonsense for anything behind a string.
+      if (m_isSparseTable && field->type != "text")
+      {
+        const size_t width = sparseWidthOf(field->type);
+        unsigned char * p = sparseFieldPtr(recordOffset, structure, field->pos);
+        const char * bufEnd = reinterpret_cast<const char *>(m_sectionData) + m_sectionDataSize;
+        if (p && reinterpret_cast<const char *>(p + width * (i + 1)) <= bufEnd)
+        {
+          std::memcpy(&val, p + width * i, width);
+          haveValue = true;
+        }
+      }
+      else
+      {
+        haveValue = readFieldValue(recordIndex, field->pos, i, field->arraySize, val);
+      }
+
+      if (!haveValue)
       {
         // The field position is out of range for this record's actual layout (a build whose DB2
         // layout doesn't match the curated positions). Emit a default so the row still has one

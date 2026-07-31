@@ -24,7 +24,11 @@ ItemRecord::ItemRecord(const std::vector<QString> & vals)
   itemclass = vals[3].toInt();
   subclass = vals[4].toInt();
   model = 1;
-  quality = 0;
+  // Was hardcoded to 0, so every item read as "poor" and anything colouring by quality
+  // showed one flat colour. ItemSparse.OverallQualityID only became readable once the
+  // sparse-record walk could reach past the leading strings; callers whose query does not
+  // select it keep the old default.
+  quality = (vals.size() > 6) ? vals[6].toInt() : 0;
   switch(vals[5].toInt())
   {
     case SHEATHETYPE_MAINHAND: sheath = ATT_LEFT_BACK_SHEATH; break;

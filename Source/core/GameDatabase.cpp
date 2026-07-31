@@ -50,7 +50,14 @@ bool core::GameDatabase::initFromXML(const QString & file)
      // Cache key = WoW build + our schema version. Bump SCHEMA_VERSION whenever the
      // table layout in database.xml (or how we read it) changes, so an old cache
      // built with a different schema is rebuilt rather than queried and failing.
-     static const int SCHEMA_VERSION = 11; // 11: ChrCustomizationReq adds ReqAchievementID/ReqQuestID/ReqItemModifiedAppearanceID (unlock-gate filter for customization choices). 10: corrected ItemSparse name-field positions (sparse-record string walk) for 12.0.7. 9: ChrCustomizationReq/ChrRaces/CreatureDisplayInfo/CreatureModelData. Bump forces a cache rebuild so the fix reaches installs upgraded over a prior build
+     // 12: ItemSparse fully declared -- all 67 record fields, most store="no" -- so the sparse
+     //     walk reaches ExpansionID, ItemLevel and OverallQualityID. 11: ChrCustomizationReq adds
+     //     ReqAchievementID/ReqQuestID/ReqItemModifiedAppearanceID. 10: corrected ItemSparse
+     //     name-field positions for 12.0.7. 9: ChrCustomizationReq/ChrRaces/CreatureDisplayInfo/
+     //     CreatureModelData. A bump forces a cache rebuild so the change reaches upgraded installs.
+     static const int SCHEMA_VERSION = 12;
+  // most store="no") so the sparse walk reaches ExpansionID, ItemLevel and OverallQualityID --
+  // expansion/quality filtering, and item quality colours that were previously always 0. // 11: ChrCustomizationReq adds ReqAchievementID/ReqQuestID/ReqItemModifiedAppearanceID (unlock-gate filter for customization choices). 10: corrected ItemSparse name-field positions (sparse-record string walk) for 12.0.7. 9: ChrCustomizationReq/ChrRaces/CreatureDisplayInfo/CreatureModelData. Bump forces a cache rebuild so the fix reaches installs upgraded over a prior build
      const QString build = GAMEDIRECTORY.version(); // current WoW build, e.g. "12.0.1.66220"
      buildVersion = build.isEmpty() ? QString() : (build + "|schema" + QString::number(SCHEMA_VERSION));
 
@@ -287,6 +294,7 @@ bool core::GameDatabase::readStructureFromXML(const QString & file)
       QDomNode key = Attributes.namedItem("primary");
       QDomNode arraySize = Attributes.namedItem("arraySize");
       QDomNode index = Attributes.namedItem("createIndex");
+      QDomNode store = Attributes.namedItem("store");
 
       if (!name.isNull() && !type.isNull())
       {
@@ -301,6 +309,10 @@ bool core::GameDatabase::readStructureFromXML(const QString & file)
 
         if (!arraySize.isNull())
           fieldStruct->arraySize = arraySize.nodeValue().toUInt();
+
+        // Declared only so the sparse walk can step over it -- no column, no value.
+        if (!store.isNull() && store.nodeValue() == "no")
+          fieldStruct->store = false;
 
         readSpecificFieldAttributes(child, fieldStruct);
 
@@ -342,6 +354,9 @@ bool core::TableStructure::create()
 
   for (auto it = fields.begin(), itEnd = fields.end(); it != itEnd; ++it)
   {
+    if (!(*it)->store)   // walked by the reader, never stored
+      continue;
+
     if ((*it)->arraySize == 1) // simple field
     {
       create += (*it)->name;
@@ -404,28 +419,34 @@ bool core::TableStructure::fill()
   QString query = "INSERT INTO ";
   query += name;
   query += "(";
-  int nbFields = fields.size();
-  int curfield = 0;
-  for (auto it = fields.begin(), itEnd = fields.end();
-    it != itEnd;
-    ++it, curfield++)
+  // Built by appending a separator BEFORE each column instead of counting down to the last
+  // one: with store="no" fields in the list, "is this the last field" is no longer the same
+  // question as "is this the last column", and getting that wrong produces a trailing comma
+  // and an INSERT that fails for the whole table.
+  bool firstColumn = true;
+  for (auto it = fields.begin(), itEnd = fields.end(); it != itEnd; ++it)
   {
+    if (!(*it)->store)
+      continue;
+
     if ((*it)->arraySize == 1) // simple field
     {
+      if (!firstColumn)
+        query += ",";
       query += (*it)->name;
+      firstColumn = false;
     }
     else
     {
       for (unsigned int i = 1; i <= (*it)->arraySize; i++)
       {
+        if (!firstColumn)
+          query += ",";
         query += (*it)->name;
         query += QString::number(i);
-        if (i != (*it)->arraySize)
-          query += ",";
+        firstColumn = false;
       }
     }
-    if (curfield != nbFields - 1)
-      query += ",";
   }
 
   query += ") VALUES";

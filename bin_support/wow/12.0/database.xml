@@ -249,20 +249,81 @@
     <field type="int8" name="SubClassID" pos="4" />
   </table>
   <table name="ItemSparse">
-    <!-- ItemSparse is a SPARSE table: the loader reads its strings by walking the record field
-         by field, so the fields listed here must match the real record's leading order/types.
-         On the 12.0.7 layout (1C17D17F, non-inline ID) the record begins with these five
-         localized string fields at record indices 0..4; there is no AllowableRace uint64 in
-         front. The old fake AllowableRace at pos 0 shifted the walk by 8 phantom bytes, which
-         front truncated every name into Description_lang and left Display_Lang empty, so the
-         item picker (which requires a non empty Display_Lang) hid most armor. AllowableRace is
-         not read anywhere in the code, so it is removed and the strings sit at real positions. -->
+    <!-- SPARSE table: every field sits inline, one after the next, strings included, so a
+         field can only be located by walking everything in front of it. That is why all 67
+         record fields are declared here even though four are wanted: store="no" means the
+         reader steps over the field but creates no column (see FieldStructure::store).
+         Order and widths follow ItemSparse.dbd, LAYOUT 1C17D17F (the 12.0.7 layout). If a
+         patch changes that layout, this block has to follow it or every value behind the
+         first wrong entry shifts. -->
     <field type="int32" name="ID" primary="yes" />
     <field type="text" name="Description_lang" pos="0" />
     <field type="text" name="Display3_Lang" pos="1" />
     <field type="text" name="Display2_Lang" pos="2" />
     <field type="text" name="Display1_Lang" pos="3" />
     <field type="text" name="Display_Lang" pos="4" />
+    <field type="int32" name="ExpansionID" pos="5" />
+    <field type="float" name="DmgVariance" pos="6" store="no" />
+    <field type="int32" name="LimitCategory" pos="7" store="no" />
+    <field type="uint32" name="DurationInInventory" pos="8" store="no" />
+    <field type="float" name="QualityModifier" pos="9" store="no" />
+    <field type="uint32" name="BagFamily" pos="10" store="no" />
+    <field type="int32" name="StartQuestID" pos="11" store="no" />
+    <field type="int32" name="LanguageID" pos="12" store="no" />
+    <field type="float" name="ItemRange" pos="13" store="no" />
+    <field type="float" name="StatPercentageOfSocket" pos="14" arraySize="10" store="no" />
+    <field type="int32" name="StatPercentEditor" pos="15" arraySize="10" store="no" />
+    <field type="int32" name="StatModifier_bonusStat" pos="16" arraySize="10" store="no" />
+    <field type="int32" name="Stackable" pos="17" store="no" />
+    <field type="int32" name="MaxCount" pos="18" store="no" />
+    <field type="int32" name="MinReputation" pos="19" store="no" />
+    <field type="uint32" name="RequiredAbility" pos="20" store="no" />
+    <field type="int32" name="AllowableRaces" pos="21" arraySize="2" store="no" />
+    <field type="uint32" name="SellPrice" pos="22" store="no" />
+    <field type="uint32" name="BuyPrice" pos="23" store="no" />
+    <field type="uint32" name="VendorStackCount" pos="24" store="no" />
+    <field type="float" name="PriceVariance" pos="25" store="no" />
+    <field type="float" name="PriceRandomValue" pos="26" store="no" />
+    <field type="int32" name="Flags" pos="27" arraySize="5" store="no" />
+    <field type="int32" name="OppositeFactionItemID" pos="28" store="no" />
+    <field type="int32" name="ModifiedCraftingReagentItemID" pos="29" store="no" />
+    <field type="int32" name="ContentTuningID" pos="30" store="no" />
+    <field type="int32" name="PlayerLevelToItemLevelCurveID" pos="31" store="no" />
+    <field type="int32" name="ItemLevelOffsetCurveID" pos="32" store="no" />
+    <field type="int32" name="ItemLevelOffsetItemLevel" pos="33" store="no" />
+    <field type="int32" name="ItemSquishEraID" pos="34" store="no" />
+    <field type="uint16" name="ItemNameDescriptionID" pos="35" store="no" />
+    <field type="uint16" name="RequiredTransmogHoliday" pos="36" store="no" />
+    <field type="uint16" name="RequiredHoliday" pos="37" store="no" />
+    <field type="uint16" name="Gem_properties" pos="38" store="no" />
+    <field type="uint16" name="Socket_match_enchantment_ID" pos="39" store="no" />
+    <field type="uint16" name="TotemCategoryID" pos="40" store="no" />
+    <field type="uint16" name="InstanceBound" pos="41" store="no" />
+    <field type="uint16" name="ZoneBound" pos="42" arraySize="2" store="no" />
+    <field type="uint16" name="ItemSet" pos="43" store="no" />
+    <field type="uint16" name="LockID" pos="44" store="no" />
+    <field type="uint16" name="PageID" pos="45" store="no" />
+    <field type="uint16" name="ItemDelay" pos="46" store="no" />
+    <field type="uint16" name="MinFactionID" pos="47" store="no" />
+    <field type="uint16" name="RequiredSkillRank" pos="48" store="no" />
+    <field type="uint16" name="RequiredSkill" pos="49" store="no" />
+    <field type="uint16" name="ItemLevel" pos="50" />
+    <field type="int16" name="AllowableClass" pos="51" store="no" />
+    <field type="uint8" name="ArtifactID" pos="52" store="no" />
+    <field type="uint8" name="SpellWeight" pos="53" store="no" />
+    <field type="uint8" name="SpellWeightCategory" pos="54" store="no" />
+    <field type="uint8" name="SocketType" pos="55" arraySize="3" store="no" />
+    <field type="uint8" name="SheatheType" pos="56" store="no" />
+    <field type="uint8" name="Material" pos="57" store="no" />
+    <field type="uint8" name="PageMaterialID" pos="58" store="no" />
+    <field type="uint8" name="Bonding" pos="59" store="no" />
+    <field type="uint8" name="DamageType" pos="60" store="no" />
+    <field type="uint8" name="ContainerSlots" pos="61" store="no" />
+    <field type="uint8" name="RequiredPVPMedal" pos="62" store="no" />
+    <field type="int8" name="RequiredPVPRank" pos="63" store="no" />
+    <field type="int8" name="RequiredLevel" pos="64" store="no" />
+    <field type="int8" name="InventoryType" pos="65" store="no" />
+    <field type="int8" name="OverallQualityID" pos="66" />
   </table>
   <table name="ItemAppearance">
     <field type="int32" name="ID" primary="yes" />

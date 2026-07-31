@@ -50,7 +50,8 @@ namespace core
       isKey(false),
       needIndex(false),
     arraySize(1),
-    id(0)
+    id(0),
+    store(true)
     {}
 
     virtual ~FieldStructure() {}
@@ -61,6 +62,14 @@ namespace core
     bool needIndex;
     unsigned int arraySize;
     int id;
+
+    // store="no" declares a field that exists in the RECORD but gets no column in the
+    // database. A sparse table's fields sit inline and back to back, so the only way to
+    // locate field N is to walk everything in front of it -- which means every preceding
+    // field must be declared with its real width, whether or not anyone wants its value.
+    // Without this, reaching ItemSparse.OverallQualityID (record index 67) would cost
+    // roughly a hundred extra columns across 172k rows.
+    bool store;
   };
 
   class _GAMEDATABASE_API_ TableStructure

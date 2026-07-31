@@ -117,6 +117,13 @@ private:
   void readWDC3Header();
 
   bool readFieldValue(unsigned int recordIndex, unsigned int fieldIndex, uint arrayIndex, uint arraySize, unsigned int & result) const;
+
+  // Start of the field declared at `fieldPos` inside a SPARSE record, found by walking the
+  // fields in front of it. Null if the walk would leave the section buffer.
+  unsigned char * sparseFieldPtr(unsigned char * recordOffset,
+                                 const core::TableStructure * structure,
+                                 int fieldPos) const;
+
   uint32 readBitpackedValue(field_storage_info info, unsigned char * recordOffset) const;
   int32 readSignedBitpackedValue(field_storage_info info, unsigned char * recordOffset) const;
 

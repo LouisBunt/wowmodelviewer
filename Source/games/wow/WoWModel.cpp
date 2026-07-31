@@ -21,6 +21,8 @@
 
 #include "logger/Logger.h"
 
+#include <QFile>
+#include <QTextStream>
 #include <QXmlStreamWriter>
 
 #include "glm/gtc/epsilon.hpp"
@@ -1022,9 +1024,38 @@ void WoWModel::initAnimated()
       {
         SKS1 sks1;
 
+        // Opt-in skeleton diagnostic (WMV_SKEL_DUMP=1). A .skel that declares a parent has
+        // its OWN SKS1/SKB1 ignored below -- animations and bones are read from the parent
+        // instead. For a variant skeleton (orcmaleupright.skel sitting next to
+        // orcmale_hd.skel) that discarded data is exactly what makes the variant different,
+        // so record what each side actually offers before deciding anything.
+        static const bool skelDump = (getenv("WMV_SKEL_DUMP") != NULL);
+        SKS1 childSks1 = {};
+        memcpy(&childSks1, skelFile->getBuffer(), sizeof(SKS1));
+        skelFile->setChunk("SKS1");       // put the read position back where it was
+
+        // A .skel that declares a parent (SKPD) used to have its OWN animations and bones
+        // ignored entirely -- everything was read from the parent. For a variant skeleton
+        // that is precisely backwards: orcmaleupright.skel exists to hold the upright
+        // orc's 118 sequences, and inheriting orcmale_hd.skel's 372 made the variant model
+        // byte-for-byte identical in behaviour to the base one. The upright posture simply
+        // never appeared.
+        //
+        // So: if the child brings its own sequences, use them. Base skeletons declare no
+        // parent and never reach this branch, so nothing else changes.
+        //
+        // Known limitation: this is a straight preference, not a merge. The child defines
+        // the common set (Stand, Walk, Run, Jump, unarmed/fist combat) and leaves the
+        // parent's weapon-specific and death/stun animations undefined, so those are not
+        // available on a variant model. A real merge needs per-animation track sourcing in
+        // ModelBone::initV3, which reads all inline tracks from a single file today.
+        // Set WMV_SKEL_PARENT_ANIMS=1 to get the old inherit-everything behaviour back.
+        static const bool forceParent = (getenv("WMV_SKEL_PARENT_ANIMS") != NULL);
+        const bool useChild = !forceParent && childSks1.nAnimations > 0;
+
         // let's try if there is a parent skel file to read
         GameFile * parentFile = 0;
-        if (skelFile->setChunk("SKPD"))
+        if (!useChild && skelFile->setChunk("SKPD"))
         {
           SKPD skpd;
           skelFile->read(&skpd, sizeof(skpd));
@@ -1040,6 +1071,22 @@ void WoWModel::initAnimated()
             {
               SKS1 Sks1;
               parentFile->read(&Sks1, sizeof(Sks1));
+
+              if (skelDump)
+              {
+                QFile dump("userSettings/skel-trace.txt");
+                if (dump.open(QIODevice::Append | QIODevice::Text))
+                  QTextStream(&dump)
+                    << "model " << QString::fromStdString(modelname)
+                    << "\n  skel " << skelFile->fullname()
+                    << "  child SKS1 nAnimations=" << childSks1.nAnimations
+                    << " nAnimationLookup=" << childSks1.nAnimationLookup
+                    << "\n  parent " << parentFile->fullname()
+                    << "  SKS1 nAnimations=" << Sks1.nAnimations
+                    << " nAnimationLookup=" << Sks1.nAnimationLookup
+                    << "\n  -> using PARENT for anims and bones; child data discarded\n";
+              }
+
               readAnimsFromFile(parentFile, afids, data, Sks1.nAnimations, Sks1.ofsAnimations, Sks1.nAnimationLookup, Sks1.ofsAnimationLookup);
             }
 
@@ -1050,6 +1097,18 @@ void WoWModel::initAnimated()
         {
           skelFile->read(&sks1, sizeof(sks1));
           memcpy(&sks1, skelFile->getBuffer(), sizeof(SKS1));
+
+          if (skelDump && useChild)
+          {
+            QFile dump("userSettings/skel-trace.txt");
+            if (dump.open(QIODevice::Append | QIODevice::Text))
+              QTextStream(&dump)
+                << "model " << QString::fromStdString(modelname)
+                << "\n  PREFER_CHILD: reading " << sks1.nAnimations
+                << " sequences from " << skelFile->fullname()
+                << " instead of inheriting the parent's\n";
+          }
+
           readAnimsFromFile(skelFile, afids, data, sks1.nAnimations, sks1.ofsAnimations, sks1.nAnimationLookup, sks1.ofsAnimationLookup);
         }
 
