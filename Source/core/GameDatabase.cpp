@@ -50,12 +50,15 @@ bool core::GameDatabase::initFromXML(const QString & file)
      // Cache key = WoW build + our schema version. Bump SCHEMA_VERSION whenever the
      // table layout in database.xml (or how we read it) changes, so an old cache
      // built with a different schema is rebuilt rather than queried and failing.
+     // 13: ItemBonus added -- resolves a Wowhead dressing-room bonus-list id to its
+     //     type-7 ItemAppearanceModifierID, the field that selects a tier set's
+     //     Raid Finder/Heroic/Mythic tint on import.
      // 12: ItemSparse fully declared -- all 67 record fields, most store="no" -- so the sparse
      //     walk reaches ExpansionID, ItemLevel and OverallQualityID. 11: ChrCustomizationReq adds
      //     ReqAchievementID/ReqQuestID/ReqItemModifiedAppearanceID. 10: corrected ItemSparse
      //     name-field positions for 12.0.7. 9: ChrCustomizationReq/ChrRaces/CreatureDisplayInfo/
      //     CreatureModelData. A bump forces a cache rebuild so the change reaches upgraded installs.
-     static const int SCHEMA_VERSION = 12;
+     static const int SCHEMA_VERSION = 13;
   // most store="no") so the sparse walk reaches ExpansionID, ItemLevel and OverallQualityID --
   // expansion/quality filtering, and item quality colours that were previously always 0. // 11: ChrCustomizationReq adds ReqAchievementID/ReqQuestID/ReqItemModifiedAppearanceID (unlock-gate filter for customization choices). 10: corrected ItemSparse name-field positions (sparse-record string walk) for 12.0.7. 9: ChrCustomizationReq/ChrRaces/CreatureDisplayInfo/CreatureModelData. Bump forces a cache rebuild so the fix reaches installs upgraded over a prior build
      const QString build = GAMEDIRECTORY.version(); // current WoW build, e.g. "12.0.1.66220"

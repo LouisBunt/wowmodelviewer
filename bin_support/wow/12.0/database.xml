@@ -329,6 +329,13 @@
     <field type="int32" name="ID" primary="yes" />
     <field type="int32" name="ItemDisplayInfoID" pos="1" />
   </table>
+  <table name="ItemBonus">
+    <field type="int32" name="ID" primary="yes" />
+    <field type="int32" name="Value" arraySize="4" pos="0" />
+    <field type="uint16" name="ParentItemBonusListID" relationshipData="yes" />
+    <field type="uint8" name="Type" pos="1" />
+    <field type="uint8" name="OrderIndex" pos="2" />
+  </table>
   <table name="ItemModifiedAppearance">
     <field type="int32" name="ID" primary="yes"  pos="0" />
     <field type="int32" name="ItemID" pos="1" relationshipData="yes" />
