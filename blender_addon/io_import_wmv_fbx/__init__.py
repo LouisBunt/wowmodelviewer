@@ -23,7 +23,7 @@
 bl_info = {
     "name": "WoW Model Viewer FBX (.fbx)",
     "author": "WoW Model Viewer: Midnight",
-    "version": (1, 1, 0),
+    "version": (1, 1, 1),
     "blender": (3, 0, 0),
     "location": "File > Import > WoW Model Viewer FBX (.fbx); 3D View > Sidebar > WMV",
     "description": "Import WMV-exported FBX with viewport-identical materials",
@@ -241,10 +241,25 @@ def _is_effect_plane(entry):
     e.g. an artifact weapon's frost/energy sheets. In-game these are animated and scroll; frozen into
     static geometry they become big flat quads with hard rectangular edges. Detected so the importer
     can optionally hide them (they're rarely wanted in a static export). A SOLID glow (blend 0, opaque
-    -- a rune/emissive detail baked onto the weapon) is NOT an effect plane and stays visible."""
-    return (bool(entry.get("isGlow", False))
-            and bool(entry.get("unlit", False))
-            and entry.get("alphaUsage", "opaque") in ("alpha_blend", "additive"))
+    -- a rune/emissive detail baked onto the weapon) is NOT an effect plane and stays visible.
+
+    Sidecars written before the exporter carried the classification in bake mode lack
+    isGlow/alphaUsage entirely -- 'Hide effect planes' was silently a no-op for them.
+    Both values are derivable from fields every sidecar version has, so derive them."""
+    blend = int(entry.get("blendMode", BM_OPAQUE))
+    unlit = bool(entry.get("unlit", False))
+
+    is_glow = entry.get("isGlow")
+    if is_glow is None:
+        is_glow = unlit or blend in (BM_ADDITIVE, BM_ADDITIVE_ALPHA)
+
+    alpha = entry.get("alphaUsage")
+    if alpha is None:
+        alpha = {BM_ALPHA_TEST: "alpha_clip", BM_ALPHA_BLEND: "alpha_blend",
+                 BM_MODULATE: "alpha_blend", BM_MODULATE2X: "alpha_blend",
+                 BM_ADDITIVE: "additive", BM_ADDITIVE_ALPHA: "additive"}.get(blend, "opaque")
+
+    return bool(is_glow) and unlit and alpha in ("alpha_blend", "additive")
 
 
 def _collect_imported_materials(objects):

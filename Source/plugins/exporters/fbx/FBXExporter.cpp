@@ -862,6 +862,14 @@ void FBXExporter::writeMaterialSidecar() const
     entry["brightnessAlpha"] = meta.brightnessAlpha;
     entry["twoSided"] = meta.twoSided;
     entry["emissive"] = QJsonArray{meta.emissiveR, meta.emissiveG, meta.emissiveB};
+    // Classification for the add-on's effect-plane detection, in BOTH sidecar
+    // versions. It used to be v2-only, which silently disabled "Hide effect planes"
+    // for every bake-mode export -- the frozen particle sheets stayed visible with
+    // no way to catch them. Derived here rather than stored: for v1 entries the
+    // fill-time fields were never set, but both values are pure functions of the
+    // blend mode and the unlit flag, which every entry carries.
+    entry["isGlow"] = meta.unlit || meta.blendMode == 3 || meta.blendMode == 4;
+    entry["alphaUsage"] = QString::fromStdString(deriveAlphaUsage(meta.blendMode));
     if (v2)
     {
       entry["shaderId"] = meta.shaderId;
@@ -869,8 +877,6 @@ void FBXExporter::writeMaterialSidecar() const
       entry["textureCount"] = meta.textureCount;
       entry["noZWrite"] = meta.noZWrite;
       entry["billboard"] = meta.billboard;
-      entry["isGlow"] = meta.isGlow;
-      entry["alphaUsage"] = QString::fromStdString(meta.alphaUsage);
       QJsonArray units;
       for (const FBXUnitMeta & u : meta.units)
       {
