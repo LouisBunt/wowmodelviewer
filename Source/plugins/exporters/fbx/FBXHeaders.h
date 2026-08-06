@@ -69,6 +69,15 @@
 
 namespace FBXHeaders
 {
+  // The FBX node name of bone i: "bone_<i>", plus "_<Role>" for the ~35 key bones WoW
+  // itself names (Head, Jaw, ArmL, ...). One function, used by createSkeleton AND the
+  // sidecar writer -- the sidecar's fbxName field must match the file or every
+  // consumer's lookup goes nowhere. Format chosen deliberately (short, index first):
+  // the index keeps siblings sorted and traceable to the M2, the role makes the bones
+  // an artist touches readable, and dropping the model-name prefix keeps Blender's
+  // outliner legible; two characters in one scene get Blender's own .001 suffixes.
+  QString boneNodeName(WoWModel* model, int boneIndex);
+
   bool createFBXHeaders(FbxString fileVersion, QString l_FileName, FbxManager* &l_Manager, FbxExporter* &l_Exporter, FbxScene* &l_Scene);
   FbxNode* createMesh(FbxManager* &l_manager, FbxScene* &l_scene, WoWModel* model, const glm::mat4 & matrix = glm::mat4(1.0f), const glm::vec3 & offset = glm::vec3(0.0f), bool addUV2 = false);
   void createSkeleton(WoWModel* l_model, FbxScene* &l_scene, FbxNode* &l_skeletonNode, std::map<int, FbxNode*> &l_boneNodes);

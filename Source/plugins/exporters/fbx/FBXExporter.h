@@ -239,6 +239,18 @@ class FBXExporter : public ExporterPlugin
     // selfTest() to confirm exactly the selected clips made it into the file.
     std::vector<std::string> m_exportedClipNames;
 
+    // One entry per written take, serialized into the sidecar's "animations" array. Exists
+    // because the loop flag cannot go into the FBX itself -- this SDK build drops custom
+    // properties on takes (see the note in FBXHeaders::createAnimation) -- and an importer
+    // that auto-loops Walk but plays Death once needs to know which is which.
+    struct FBXAnimMeta {
+      std::string name;   // take name as written (post de-duplication)
+      int index;          // model animation index (what the UI's clip list holds)
+      unsigned int length; // milliseconds
+      bool loop;          // ANIMATION_LOOPED (0x20) in ModelAnimation.flags
+    };
+    std::vector<FBXAnimMeta> m_animMeta;
+
     std::map<int, FbxNode*> m_attachSkeletonNode;
     std::map<int, FbxNode*> m_attachMeshNodes;
     std::map<int, std::map<int, FbxNode*>> m_attachBoneNodes;

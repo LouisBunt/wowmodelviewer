@@ -291,6 +291,31 @@ FbxNode * FBXHeaders::createMesh(FbxManager* &l_manager, FbxScene* &l_scene, WoW
   return meshNode;
 }
 
+QString FBXHeaders::boneNodeName(WoWModel* model, int boneIndex)
+{
+  // Indexed by KeyBoneTable (wow_enums.h). The strings follow the community's M2
+  // documentation names, which is what rig/retarget tooling expects to read.
+  static const char* kKeyBoneNames[] = {
+    "ArmL", "ArmR", "ShoulderL", "ShoulderR", "SpineLow", "Waist", "Head", "Jaw",
+    "IndexFingerR", "MiddleFingerR", "PinkyFingerR", "RingFingerR", "ThumbR",
+    "IndexFingerL", "MiddleFingerL", "PinkyFingerL", "RingFingerL", "ThumbL",
+    "BTH", "CSR", "CSL", "Breath", "Name", "NameMount", "CHD", "CCH", "Root",
+    "Wheel1", "Wheel2", "Wheel3", "Wheel4", "Wheel5", "Wheel6", "Wheel7", "Wheel8"
+  };
+  static const int kKeyBoneCount = (int)(sizeof(kKeyBoneNames) / sizeof(kKeyBoneNames[0]));
+
+  QString name = QString("bone_%1").arg(boneIndex);
+  if (model && boneIndex >= 0 && boneIndex < (int)model->bones.size())
+  {
+    // Clamped, not trusted: keyboneid comes straight from the file and holds junk on
+    // some models (the same reason WoWModel sanitizes its keyBoneLookup).
+    const int keyBone = model->bones[boneIndex].boneDef.keyboneid;
+    if (keyBone >= 0 && keyBone < kKeyBoneCount)
+      name += QString("_%1").arg(kKeyBoneNames[keyBone]);
+  }
+  return name;
+}
+
 void FBXHeaders::createSkeleton(WoWModel * l_model, FbxScene *& l_scene, FbxNode *& l_skeletonNode, std::map<int, FbxNode*>& l_boneNodes)
 {
   // Grouping node that holds the rig. It is a PLAIN transform node, NOT a skeleton joint:
@@ -342,10 +367,9 @@ void FBXHeaders::createSkeleton(WoWModel * l_model, FbxScene *& l_scene, FbxNode
     if (pid > -1)
       trans -= l_model->bones[pid].pivot;
 
-    // Unique, decimal bone name. The old `FbxString += static_cast<int>(i)` appended the
-    // CHARACTER whose code is i (garbage, and non-unique/empty for many i), so bones lost their
-    // names -- breaking retargeting and humanoid mapping in every DCC. Build it from the index.
-    FbxString bone_name(qPrintable(QString("%1_bone_%2").arg(l_model->name()).arg((int)i)));
+    // Unique name from the index, readable role suffix where WoW names the bone --
+    // see boneNodeName() for the full rationale and the sidecar coupling.
+    FbxString bone_name(qPrintable(boneNodeName(l_model, (int)i)));
 
     FbxNode* skeleton_node = FbxNode::Create(l_scene, bone_name);
     l_boneNodes[i] = skeleton_node;
@@ -439,10 +463,10 @@ void FBXHeaders::createAnimation(WoWModel * l_model, FbxScene *& l_scene, QStrin
   anim_stack->AddMember(anim_layer);
 
   // Looping: FBX has no standard "loop" flag on a take, and the SDK data-type globals used to
-  // author a custom bool property are not exported by this SDK build. WoW sequences loop by
-  // default (and the source flag bit 0x20 marks looped ones); since there is no portable field
-  // to carry it, the clip's full [0, length] range is written and the importing DCC/engine sets
-  // looping per its own clip settings. (Documented as a known limitation.)
+  // author a custom bool property are not exported by this SDK build. The flag travels in the
+  // sidecar instead: FBXExporter collects one entry per take (name/index/length/loop from the
+  // 0x20 flag bit) and writeMaterialSidecar() emits them as the "animations" array, where the
+  // Blender add-on -- or any consumer -- can pick it up.
 
   // Bake at a fixed, real frame rate. WoW stores per-bone keys at arbitrary millisecond times
   // with mixed interpolation (linear/hermite/bezier); sampling onto a uniform 30 fps grid and

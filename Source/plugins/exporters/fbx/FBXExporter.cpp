@@ -76,6 +76,15 @@ static void wmvProgress(const std::string & line)
   std::fflush(stdout);
 }
 
+// The FBX path's folder, INCLUDING the trailing separator. Accepts either separator:
+// Qt's file dialog hands over forward-slash paths even on Windows, and cutting only at
+// '\\' resolved those to "" -- every companion texture then silently landed in the
+// process working directory instead of next to the FBX.
+static QString dirOf(const QString & path)
+{
+  return path.left(qMax(path.lastIndexOf('\\'), path.lastIndexOf('/')) + 1);
+}
+
 // Constructors
 //--------------------------------------------------------------------
 FBXExporter::FBXExporter():
@@ -301,6 +310,13 @@ void FBXExporter::createMeshes()
       for (std::map<POSITION_SLOTS, WoWModel *>::iterator It = itemModels.begin(); It != itemModels.end(); ++It)
       {
         WoWModel * itemModel = It->second;
+
+        // What the viewport hides, the export leaves out. showModel is the flag the
+        // renderer honours (WoWModel::draw), so an item the user switched off would
+        // otherwise reappear in Blender. The material loop applies the SAME test --
+        // the two walks must stay in lockstep or material indices drift.
+        if (!itemModel || !itemModel->showModel)
+          continue;
         LOG_INFO << "Found attached item:" << itemModel->modelname.c_str();
 
         // Build the item mesh in its OWN local space (identity matrix). We position it by
@@ -451,6 +467,8 @@ void FBXExporter::createAnimations()
       name = QString("%1_%2").arg(base).arg(dupe++);
     usedNames.insert(name.toStdString());
     m_exportedClipNames.push_back(name.toStdString());
+    m_animMeta.push_back({ name.toStdString(), animIdx, anim.length,
+                           (anim.flags & ANIMATION_LOOPED) != 0 });
 
     wmvProgress("CLIP " + std::to_string(++clipNum) + " " + std::to_string(m_animsToExport.size()) + " " + name.toStdString());
     FBXHeaders::createAnimation(m_p_model, m_p_scene, name, anim, m_boneNodes);
@@ -769,10 +787,7 @@ std::vector<FBXUnitMeta> FBXExporter::exportRawUnits(WoWModel * model, ModelRend
   int n = pass->textureCount;
   if (n < 1) n = 1; if (n > 4) n = 4;
 
-  const QString dir = QString::fromStdWString(m_filename);
-  // Accept either separator: the GUI hands us backslash paths, but a forward-slash path (headless
-  // / programmatic export) must still resolve the FBX's folder, not silently fall back to the CWD.
-  const QString dirPrefix = dir.left(qMax(dir.lastIndexOf('\\'), dir.lastIndexOf('/')) + 1);
+  const QString dirPrefix = dirOf(QString::fromStdWString(m_filename));
   const bool glow = pass->unlit || pass->blendmode == 3 || pass->blendmode == 4;
 
   for (int u = 0; u < n; u++)
@@ -901,6 +916,57 @@ void FBXExporter::writeMaterialSidecar() const
     root["uv2_set"] = "UV2Map";
   root["materials"] = materials;
 
+  // Skeleton metadata the FBX cannot carry in a portable way: which key-bone role each
+  // bone plays (keyBone), and where the game pins gear (attachments). Additive keys,
+  // same policy as "animations" below. fbxName is the node name createSkeleton wrote --
+  // both call FBXHeaders::boneNodeName, which is what keeps them in agreement.
+  if (m_p_model && !m_p_model->bones.empty())
+  {
+    QJsonArray bones;
+    for (int i = 0; i < (int)m_p_model->bones.size(); ++i)
+    {
+      const Bone & b = m_p_model->bones[i];
+      QJsonObject bj;
+      bj["index"] = i;
+      bj["fbxName"] = FBXHeaders::boneNodeName(m_p_model, i);
+      bj["parent"] = b.parent;
+      bj["keyBone"] = b.boneDef.keyboneid;
+      bj["pivot"] = QJsonArray{ b.pivot.x, b.pivot.y, b.pivot.z };
+      bones.append(bj);
+    }
+    root["bones"] = bones;
+
+    QJsonArray attachments;
+    for (const auto & att : m_p_model->atts)
+    {
+      QJsonObject aj;
+      aj["id"] = (int)att.id;
+      aj["bone"] = (int)att.bone;
+      aj["pos"] = QJsonArray{ att.pos.x, att.pos.y, att.pos.z };
+      attachments.append(aj);
+    }
+    if (!attachments.isEmpty())
+      root["attachments"] = attachments;
+  }
+
+  // Additive key, deliberately NOT a version bump: an older add-on that ignores it loses
+  // nothing. The loop flag lives here because the FBX take cannot carry it (SDK drops
+  // custom properties on takes -- see FBXHeaders::createAnimation).
+  if (!m_animMeta.empty())
+  {
+    QJsonArray anims;
+    for (const auto & am : m_animMeta)
+    {
+      QJsonObject a;
+      a["name"] = QString::fromStdString(am.name);
+      a["index"] = am.index;
+      a["lengthMs"] = (int)am.length;
+      a["loop"] = am.loop;
+      anims.append(a);
+    }
+    root["animations"] = anims;
+  }
+
   const QString path = QString::fromStdWString(m_filename) + ".wmvmat.json";
   QFile file(path);
   if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
@@ -1021,8 +1087,7 @@ void FBXExporter::createMaterials()
             if (glid == ModelRenderPass::INVALID_TEX) continue;
             QString rawName = QString("rawtex_pass%1_unit%2_%3.png").arg(i).arg(u)
               .arg(QString(m_p_model->getNameForTex(units[u])).section('/', -1).section('\\', -1).replace(".blp",""));
-            QString rawFullpath = QString::fromStdWString(m_filename);
-            rawFullpath = rawFullpath.left(rawFullpath.lastIndexOf('\\') + 1) + rawName;
+            QString rawFullpath = dirOf(QString::fromStdWString(m_filename)) + rawName;
             exportGLTexture(glid, rawFullpath.toStdWString());
             LOG_INFO << "[matdump] dumped raw unit" << u << "->" << qPrintable(rawFullpath);
           }
@@ -1065,8 +1130,7 @@ void FBXExporter::createMaterials()
         tex_name = tex_name.left(dot) + suffix + tex_name.mid(dot);
       }
 
-      QString tex_fullpath_filename = QString::fromStdWString(m_filename);
-      tex_fullpath_filename = tex_fullpath_filename.left(tex_fullpath_filename.lastIndexOf('\\') + 1) + tex_name;
+      QString tex_fullpath_filename = dirOf(QString::fromStdWString(m_filename)) + tex_name;
 
       if (baked)
         m_bakedTextures[tex_fullpath_filename.toStdWString()] = { std::move(bakedPixelsBGRA), bakedW, bakedH };
@@ -1156,6 +1220,11 @@ void FBXExporter::createMaterials()
       for (std::map<POSITION_SLOTS, WoWModel *>::iterator It = itemModels.begin(); It != itemModels.end(); ++It)
       {
         WoWModel* model = It->second;
+        // Mirror of the createMeshes() filter -- a hidden item has no mesh node, so a
+        // material for it would attach to nothing (and the AddMaterial below would
+        // dereference a map entry that was never created).
+        if (!model || !model->showModel)
+          continue;
         for (unsigned int i = 0; i < model->passes.size(); i++)
         {
           ModelRenderPass * pass = model->passes[i];
@@ -1278,8 +1347,7 @@ void FBXExporter::createMaterials()
               tex_name = tex_name.left(dot) + suffix + tex_name.mid(dot);
             }
 
-            QString tex_fullpath_filename = QString::fromStdWString(m_filename);
-            tex_fullpath_filename = tex_fullpath_filename.left(tex_fullpath_filename.lastIndexOf('\\') + 1) + tex_name;
+            QString tex_fullpath_filename = dirOf(QString::fromStdWString(m_filename)) + tex_name;
 
             if (baked)
               m_bakedTextures[tex_fullpath_filename.toStdWString()] = { std::move(bakedPixelsBGRA), bakedW, bakedH };
@@ -1340,8 +1408,12 @@ void FBXExporter::createMaterials()
               m_materialMeta.push_back(std::move(meta));
             }
 
-            // Add material to the scene.
-            m_attachMeshNodes[It->first]->AddMaterial(material);
+            // Add material to the scene. find() rather than operator[]: if the mesh walk
+            // skipped this slot (hidden item, failed mesh), [] would insert a null node
+            // and the AddMaterial call would crash instead of skipping.
+            const auto attachIt = m_attachMeshNodes.find(It->first);
+            if (attachIt != m_attachMeshNodes.end() && attachIt->second)
+              attachIt->second->AddMaterial(material);
           }
         }
       }
