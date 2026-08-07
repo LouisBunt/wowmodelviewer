@@ -1,6 +1,11 @@
 # ----------------------------------------------------------------------------
 # WoW Model Viewer: Midnight -- Blender FBX importer add-on.
 #
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Part of better Model Viewer, distributed under the GNU General Public License
+# version 3 or later -- the same licence Blender add-ons require anyway.
+# Source: https://github.com/LouisBunt/wowmodelviewer-qt
+#
 # Imports an FBX exported by WoW Model Viewer: Midnight and rebuilds every
 # material's node graph from the ".wmvmat.json" sidecar the exporter writes,
 # so the imported model matches the WMV viewport exactly:

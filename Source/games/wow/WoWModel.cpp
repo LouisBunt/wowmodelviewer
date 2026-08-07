@@ -3021,6 +3021,23 @@ void WoWModel::setItemFocus(int slot)
 // drawn whenever the focused piece is a merged one, and the geosets do the hiding.
 void WoWModel::applyItemFocus()
 {
+  // A focus slot that holds nothing showable would hide the body AND find no item to put in
+  // its place, leaving an empty viewport with no control left to undo it (the row's eye is
+  // hidden while the slot is empty). Unequipping the focused piece is the ordinary way to get
+  // here, so fall back to the full view rather than trusting the caller to have cleaned up.
+  if (itemFocusSlot_ >= 0)
+  {
+    bool showable = false;
+    for (auto it = begin(); it != end() && !showable; ++it)
+    {
+      WoWItem * item = *it;
+      showable = item && (int)item->slot() == itemFocusSlot_ && item->id() != 0 &&
+                 (!item->models().empty() || item->mergedModel() != nullptr);
+    }
+    if (!showable)
+      itemFocusSlot_ = -1;
+  }
+
   if (itemFocusSlot_ < 0)
   {
     showModel = true;
