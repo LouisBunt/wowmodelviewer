@@ -106,6 +106,12 @@ struct FBXMaterialMeta {
   bool billboard = false;
   bool isGlow = false;        // unlit || additive -> add-on builds an Emission material
   std::string alphaUsage = "opaque"; // opaque|specular_ignore|alpha_clip|alpha_blend|additive
+  // Unit-0 UV scroll for BAKE-mode entries, so the add-on can animate the frozen
+  // effect sheets. Component mode carries the same data per unit instead; and a
+  // combiner-BAKED texture must never scroll again -- the bake already is the sweep
+  // over the scroll cycle -- which is why the fill site checks !baked.
+  bool hasScroll = false;
+  FBXScrollTrack scroll;
   std::vector<FBXUnitMeta> units;    // per-texture-unit raw data (empty in bake mode)
   bool hasAnimatedOpacity = false;
   FBXScrollTrack animatedOpacity;    // keys use .v (opacity 0..1); .u unused

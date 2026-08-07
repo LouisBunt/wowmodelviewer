@@ -23,7 +23,7 @@
 bl_info = {
     "name": "WoW Model Viewer FBX (.fbx)",
     "author": "WoW Model Viewer: Midnight",
-    "version": (1, 1, 1),
+    "version": (1, 2, 0),
     "blender": (3, 0, 0),
     "location": "File > Import > WoW Model Viewer FBX (.fbx); 3D View > Sidebar > WMV",
     "description": "Import WMV-exported FBX with viewport-identical materials",
@@ -35,7 +35,7 @@ import os
 import re
 
 import bpy
-from bpy.props import StringProperty, BoolProperty
+from bpy.props import StringProperty, BoolProperty, EnumProperty
 from bpy_extras.io_utils import ImportHelper
 
 # Raw M2 blend modes, mirrored from the exporter.
@@ -107,6 +107,51 @@ def _stamp_wmv_properties(material, entry):
     material["wmv_additive"] = int(entry.get("blendMode", BM_OPAQUE)) in (
         BM_ADDITIVE, BM_ADDITIVE_ALPHA)
     material["wmv_texture"] = str(entry.get("texture", ""))
+
+
+def _get_scroll(entry):
+    """The material's UV-scroll track: v1 sidecars carry it per material, v2 per
+    texture unit -- prefer the unit data where present."""
+    for unit in entry.get("units", []):
+        if unit.get("texScroll"):
+            return unit["texScroll"]
+    return entry.get("texScroll")
+
+
+def _add_uv_scroll(material, image_node, scroll):
+    """Drive the image's UVs with a constant scroll so frozen effect sheets animate.
+
+    A Mapping node ahead of the image gets drivers on Location X/Y with the
+    expression '<rate> * frame'. A constant times the builtin `frame` counts as a
+    "simple expression", which Blender evaluates WITHOUT the auto-run-Python
+    permission -- the same trick wow.export's TexturePanner uses. The frame rate is
+    baked into the constant at import time; the sidecar's period is in milliseconds.
+    """
+    period = float(scroll.get("period_ms", 0))
+    if period <= 0.0:
+        return False
+    fps = bpy.context.scene.render.fps or 30
+    rate_u = float(scroll.get("dx", 0.0)) / period * (1000.0 / fps)
+    rate_v = float(scroll.get("dy", 0.0)) / period * (1000.0 / fps)
+    if rate_u == 0.0 and rate_v == 0.0:
+        return False
+
+    tree = material.node_tree
+    uv = tree.nodes.new("ShaderNodeUVMap")
+    uv.location = (image_node.location.x - 400, image_node.location.y)
+    mapping = tree.nodes.new("ShaderNodeMapping")
+    mapping.vector_type = "POINT"
+    mapping.location = (image_node.location.x - 220, image_node.location.y)
+    tree.links.new(uv.outputs["UV"], mapping.inputs["Vector"])
+    tree.links.new(mapping.outputs["Vector"], image_node.inputs["Vector"])
+
+    for axis, rate in ((0, rate_u), (1, rate_v)):
+        if rate == 0.0:
+            continue
+        fcurve = mapping.inputs["Location"].driver_add("default_value", axis)
+        fcurve.driver.type = "SCRIPTED"
+        fcurve.driver.expression = "%.10f * frame" % rate
+    return True
 
 
 def _find_image_node(material):
@@ -233,6 +278,12 @@ def _build_material_nodes(material, entry):
         links.new(principled.outputs["BSDF"], output.inputs["Surface"])
 
     material.use_backface_culling = not bool(entry.get("twoSided", False))
+
+    # Last, ON PURPOSE: the rebuild above removes every node except image and output,
+    # so the scroll chain has to be added after it.
+    scroll = _get_scroll(entry)
+    if scroll:
+        material["wmv_has_scroll"] = _add_uv_scroll(material, image_node, scroll)
     return True
 
 
@@ -322,7 +373,7 @@ def _separate_by_material(objects):
 
 
 def import_wmv_fbx(filepath, separate_materials=True, hide_effect_planes=False,
-                  build_materials=True):
+                  build_materials=True, effect_planes=None):
     """Import a WMV FBX. Returns (imported object count, rebuilt material count,
     sidecar found).
 
@@ -330,7 +381,13 @@ def import_wmv_fbx(filepath, separate_materials=True, hide_effect_planes=False,
     its node graph rebuilt to match the WMV viewport -- glow as emission, alpha modes,
     backface culling. Without it, materials stay exactly as Blender's stock FBX importer
     creates them and only the render-state metadata is stamped as custom properties, for
-    artists who build their own shaders."""
+    artists who build their own shaders.
+
+    effect_planes: "show" | "hide_static" | "hide_all". hide_static hides only frozen
+    sheets WITHOUT a scroll track -- animated ones now live and stay visible. The old
+    hide_effect_planes bool maps to hide_all for script compatibility."""
+    if effect_planes is None:
+        effect_planes = "hide_all" if hide_effect_planes else "show"
     before = set(bpy.data.objects)
     bpy.ops.import_scene.fbx(filepath=filepath)
     imported = [obj for obj in bpy.data.objects if obj not in before]
@@ -356,15 +413,19 @@ def import_wmv_fbx(filepath, separate_materials=True, hide_effect_planes=False,
     if separate_materials:
         imported = _separate_by_material(imported)
 
-    # Optionally hide the frozen particle/effect billboards (frost/energy sheets etc.). They're kept
-    # in the scene (just hidden in viewport + render) so nothing is lost -- un-hide to get them back.
-    # Only meaningful when split into per-material objects; otherwise a whole merged mesh would hide.
-    if hide_effect_planes and separate_materials:
+    # Optionally hide the frozen particle/effect billboards. hide_static keeps the ones
+    # that scroll -- those animate now and are usually WANTED. Hidden, not deleted, so
+    # un-hiding in the outliner brings them back. Only meaningful when split into
+    # per-material objects; otherwise a whole merged mesh would hide.
+    if effect_planes != "show" and separate_materials:
         hidden = 0
         for obj in imported:
             if obj.type != "MESH":
                 continue
-            if any(m is not None and m.get("wmv_effect_plane") for m in obj.data.materials):
+            mats = [m for m in obj.data.materials if m is not None]
+            is_plane = any(m.get("wmv_effect_plane") for m in mats)
+            animated = any(m.get("wmv_has_scroll") for m in mats)
+            if is_plane and (effect_planes == "hide_all" or not animated):
                 obj.hide_viewport = True
                 obj.hide_render = True
                 hidden += 1
@@ -384,12 +445,16 @@ class IMPORT_SCENE_OT_wmv_fbx(bpy.types.Operator, ImportHelper):
     filename_ext = ".fbx"
     filter_glob: StringProperty(default="*.fbx", options={"HIDDEN"})
 
-    hide_effect_planes: BoolProperty(
-        name="Hide effect planes",
-        description="Hide the frozen particle/effect billboards (frost, energy, glow sheets). "
-                    "In-game these are animated; as static geometry they're flat hard-edged quads. "
-                    "They're hidden, not deleted -- un-hide them in the Outliner to bring them back",
-        default=False,
+    effect_planes: EnumProperty(
+        name="Effektflächen",
+        description="Was mit den Partikel-/Effektflächen passiert",
+        items=(
+            ("show", "Alle zeigen", "Auch eingefrorene Effektflächen bleiben sichtbar"),
+            ("hide_static", "Nur starre verstecken",
+             "Flächen mit UV-Animation laufen weiter; nur wirklich eingefrorene werden versteckt"),
+            ("hide_all", "Alle verstecken", "Jede Effektfläche wird versteckt"),
+        ),
+        default="hide_static",
     )
 
     build_materials: BoolProperty(
@@ -402,7 +467,7 @@ class IMPORT_SCENE_OT_wmv_fbx(bpy.types.Operator, ImportHelper):
 
     def execute(self, context):
         object_count, rebuilt, had_sidecar = import_wmv_fbx(
-            self.filepath, hide_effect_planes=self.hide_effect_planes,
+            self.filepath, effect_planes=self.effect_planes,
             build_materials=self.build_materials)
         if not had_sidecar:
             self.report(
@@ -463,7 +528,7 @@ class WMV_OT_import_last_export(bpy.types.Operator):
                 "klicken, dann hier importieren.",
             )
             return {"CANCELLED"}
-        object_count, _, had_sidecar = import_wmv_fbx(path)
+        object_count, _, had_sidecar = import_wmv_fbx(path, effect_planes="hide_static")
         self.report(
             {"INFO"},
             "%d Objekte aus %s importiert%s" % (

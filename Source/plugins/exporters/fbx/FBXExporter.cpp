@@ -870,6 +870,21 @@ void FBXExporter::writeMaterialSidecar() const
     // blend mode and the unlit flag, which every entry carries.
     entry["isGlow"] = meta.unlit || meta.blendMode == 3 || meta.blendMode == 4;
     entry["alphaUsage"] = QString::fromStdString(deriveAlphaUsage(meta.blendMode));
+    // The unit-0 UV scroll, in BOTH sidecar versions (additive key, same shape as the
+    // v2 per-unit field): this is what lets the add-on ANIMATE a frozen effect sheet
+    // instead of hiding it. The V flip is already inside extractScrollTrack.
+    if (meta.hasScroll)
+    {
+      QJsonObject sc;
+      sc["period_ms"] = meta.scroll.periodMs;
+      sc["dx"] = meta.scroll.dx;
+      sc["dy"] = meta.scroll.dy;
+      QJsonArray keys;
+      for (const FBXAnimKey & k : meta.scroll.keys)
+        keys.append(QJsonObject{{"t", k.t}, {"u", k.u}, {"v", k.v}});
+      sc["keys"] = keys;
+      entry["texScroll"] = sc;
+    }
     if (v2)
     {
       entry["shaderId"] = meta.shaderId;
@@ -1197,6 +1212,13 @@ void FBXExporter::createMaterials()
         meta.emissiveR = pass->ecol.r > 0.0f ? pass->ecol.r : 1.0f;
         meta.emissiveG = pass->ecol.g > 0.0f ? pass->ecol.g : 1.0f;
         meta.emissiveB = pass->ecol.b > 0.0f ? pass->ecol.b : 1.0f;
+        if (!baked)
+        {
+          const std::vector<TextureAnim> & tas = m_p_model->getTexAnims();
+          if (pass->texanim >= 0 && pass->texanim < (int16)tas.size())
+            meta.hasScroll = extractScrollTrack(tas[pass->texanim],
+                                                (ssize_t)m_p_model->anim, meta.scroll);
+        }
         if (m_exportComponentRaw)
         {
           fillComponentMeta(meta, m_p_model, pass, (int)i);
@@ -1406,6 +1428,13 @@ void FBXExporter::createMaterials()
               meta.emissiveR = pass->ecol.r > 0.0f ? pass->ecol.r : 1.0f;
               meta.emissiveG = pass->ecol.g > 0.0f ? pass->ecol.g : 1.0f;
               meta.emissiveB = pass->ecol.b > 0.0f ? pass->ecol.b : 1.0f;
+              if (!baked)
+              {
+                const std::vector<TextureAnim> & tas = model->getTexAnims();
+                if (pass->texanim >= 0 && pass->texanim < (int16)tas.size())
+                  meta.hasScroll = extractScrollTrack(tas[pass->texanim],
+                                                      (ssize_t)model->anim, meta.scroll);
+              }
               if (m_exportComponentRaw)
               {
                 fillComponentMeta(meta, model, pass, (int)i);
