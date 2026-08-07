@@ -101,7 +101,10 @@ class _WOWMODEL_API_ WoWModel : public ManagedItem, public Displayable, public M
   std::vector<glm::vec3> bounds;
 
   void refreshMerging();
+  void applyItemFocus();
+  int itemFocusSlot_ = -1;
   std::set<WoWModel *> mergedModels;
+
 
   // Cache of previously-merged-then-unmerged models, keyed by FileDataID. Re-merging a
   // model from here reuses the parsed M2 + GPU buffers instead of re-reading the file
@@ -182,6 +185,28 @@ public:
 
   std::vector<ModelRenderPass *> passes;
   std::vector<ModelGeosetHD *> geosets;
+  // Where each merged model's geosets ended up in this model's geosets vector:
+  // {first index, count}. Merged geometry ("collections" pieces -- many helms and
+  // belts are merged rather than attached) is indistinguishable from body geometry
+  // once combined, so a caller that wants to show ONE piece on its own has no way to
+  // tell them apart. Rebuilt by refreshMerging(), which is the only place that knows.
+  std::map<WoWModel *, std::pair<uint, uint>> mergedGeosetRanges;
+
+  // Item view: show ONLY the equipment piece in this CharSlots index, -1 for the whole
+  // character. Applied at the END of refresh() rather than by the caller, because
+  // refresh() recomputes every geoset's visibility from the equipment -- a caller that
+  // hid things beforehand had its work undone by the next refresh, whichever of the
+  // many callers triggered it.
+  void setItemFocus(int slot);
+  int itemFocus() const { return itemFocusSlot_; }
+
+  // World-space bounds of what is actually DRAWN right now -- merged geosets that are
+  // still displayed plus every visible attached item, each moved to its bone. Needed
+  // because the camera otherwise frames the full character mesh, which in the item
+  // view is invisible: the piece then sits tiny in the middle of an empty viewport.
+  // Returns false when nothing is visible.
+  bool visibleBounds(glm::vec3 & outMin, glm::vec3 & outMax);
+
 
   // ===============================
   // Toggles

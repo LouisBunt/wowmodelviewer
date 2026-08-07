@@ -79,7 +79,14 @@ namespace FBXHeaders
   QString boneNodeName(WoWModel* model, int boneIndex);
 
   bool createFBXHeaders(FbxString fileVersion, QString l_FileName, FbxManager* &l_Manager, FbxExporter* &l_Exporter, FbxScene* &l_Scene);
-  FbxNode* createMesh(FbxManager* &l_manager, FbxScene* &l_scene, WoWModel* model, const glm::mat4 & matrix = glm::mat4(1.0f), const glm::vec3 & offset = glm::vec3(0.0f), bool addUV2 = false);
+
+  // outOldToNew, when given, receives one entry per model vertex: the exported control-point
+  // index, or -1 for a vertex no VISIBLE pass references. Only the kept ones are written, so a
+  // model whose geometry is mostly hidden -- the item view is the extreme case, one helmet out
+  // of a whole character -- no longer drags every other vertex along as loose points. Anything
+  // else addressing control points by model vertex index (the skin clusters) must translate
+  // through this map, or the weights land on the wrong points.
+  FbxNode* createMesh(FbxManager* &l_manager, FbxScene* &l_scene, WoWModel* model, const glm::mat4 & matrix = glm::mat4(1.0f), const glm::vec3 & offset = glm::vec3(0.0f), bool addUV2 = false, std::vector<int>* outOldToNew = nullptr);
   void createSkeleton(WoWModel* l_model, FbxScene* &l_scene, FbxNode* &l_skeletonNode, std::map<int, FbxNode*> &l_boneNodes);
   void storeBindPose(FbxScene* &l_scene, std::vector<FbxCluster*> l_boneClusters, FbxNode* l_meshNode);
   void storeRestPose(FbxScene* &l_scene, std::map<int, FbxNode*>& l_boneNodes);

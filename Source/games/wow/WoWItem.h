@@ -77,6 +77,12 @@ class _WOWITEM_API_ WoWItem : public Component
 
     std::map<POSITION_SLOTS, WoWModel *> models() const { return itemModels_; }
 
+    // The "collections" geometry merged INTO the character mesh, if this item has any.
+    // Not the same thing as models(): those are attachments drawn on their own, this
+    // one only exists as a geoset range inside the character (see
+    // WoWModel::mergedGeosetRanges). Null for items that are purely attached.
+    WoWModel * mergedModel() const { return mergedModel_; }
+
     void save(QXmlStreamWriter &) const ;
     void load(QString &);
 

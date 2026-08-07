@@ -241,6 +241,11 @@ class FBXExporter : public ExporterPlugin
     std::map<int,FbxNode*> m_boneNodes;
     std::vector<FbxCluster*> m_boneClusters;
 
+    // Main model vertex index -> exported control point, -1 for the vertices createMesh left out
+    // because no visible pass uses them. linkMeshAndSkeleton translates through this; empty means
+    // "not remapped", in which case the index is used as-is.
+    std::vector<int> m_vertexRemap;
+
     // Names of the animation takes actually written this export (after de-duplication), used by
     // selfTest() to confirm exactly the selected clips made it into the file.
     std::vector<std::string> m_exportedClipNames;

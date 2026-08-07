@@ -3005,6 +3005,140 @@ WoWModel* WoWModel::getMergedModel(uint fileID)
   return nullptr;
 }
 
+void WoWModel::setItemFocus(int slot)
+{
+  itemFocusSlot_ = slot;
+  applyItemFocus();
+}
+
+// Show a single equipped piece by itself.
+//
+// Equipment reaches the character in two different ways and both have to be silenced:
+// ATTACHED models (shoulders, weapons, capes, some helms) are separate models drawn as
+// children of the character's attachment tree, while MERGED "collections" geometry
+// (the other kind of helm, belts, boots) is copied into the character's own geoset
+// list. Hiding the body would take the merged pieces with it, so the body model stays
+// drawn whenever the focused piece is a merged one, and the geosets do the hiding.
+void WoWModel::applyItemFocus()
+{
+  if (itemFocusSlot_ < 0)
+  {
+    showModel = true;
+    for (auto it = begin(); it != end(); ++it)
+      if (WoWItem * item = *it)
+        for (auto & m : item->models())
+          if (m.second)
+            m.second->showModel = true;
+    return;
+  }
+
+  bool focusedIsMerged = false;
+  for (auto it = begin(); it != end(); ++it)
+  {
+    WoWItem * item = *it;
+    if (!item)
+      continue;
+    const bool wanted = ((int)item->slot() == itemFocusSlot_);
+    for (auto & m : item->models())
+      if (m.second)
+        m.second->showModel = wanted;
+    if (wanted && item->mergedModel())
+      focusedIsMerged = true;
+  }
+
+  // The body's own geosets are everything before the first merged range.
+  uint baseCount = (uint)geosets.size();
+  for (const auto & r : mergedGeosetRanges)
+    if (r.second.first < baseCount)
+      baseCount = r.second.first;
+  for (uint g = 0; g < baseCount && g < geosets.size(); ++g)
+    if (geosets[g])
+      geosets[g]->display = false;
+
+  for (auto it = begin(); it != end(); ++it)
+  {
+    WoWItem * item = *it;
+    if (!item || !item->mergedModel())
+      continue;
+    const auto range = mergedGeosetRanges.find(item->mergedModel());
+    if (range == mergedGeosetRanges.end())
+      continue;
+    const bool wanted = ((int)item->slot() == itemFocusSlot_);
+    for (uint g = range->second.first;
+         g < range->second.first + range->second.second && g < geosets.size(); ++g)
+      if (geosets[g] && !wanted)
+        geosets[g]->display = false;
+  }
+
+  showModel = focusedIsMerged;
+}
+
+bool WoWModel::visibleBounds(glm::vec3 & outMin, glm::vec3 & outMax)
+{
+  bool any = false;
+  glm::vec3 mn(1e9f, 1e9f, 1e9f), mx(-1e9f, -1e9f, -1e9f);
+  const auto grow = [&](const glm::vec3 & v) {
+    if (v.x < mn.x) mn.x = v.x;
+    if (v.y < mn.y) mn.y = v.y;
+    if (v.z < mn.z) mn.z = v.z;
+    if (v.x > mx.x) mx.x = v.x;
+    if (v.y > mx.y) mx.y = v.y;
+    if (v.z > mx.z) mx.z = v.z;
+    any = true;
+  };
+
+  // Only DISPLAYED geometry may set the bounds. A weapon carries effect geometry -- glow
+  // planes, ribbon emitters -- in geosets that stay hidden; counting those vertices blew the
+  // radius up to several times the visible blade and the camera framed a sword as a speck.
+  // The rule is the same for the character and for every attached item, hence one lambda.
+  const auto growVisible = [&](WoWModel * mdl, const glm::vec3 & offset) {
+    if (!mdl)
+      return;
+    for (auto * g : mdl->geosets)
+    {
+      if (!g || !g->display)
+        continue;
+      for (uint v = g->vstart; v < g->vstart + g->vcount && v < mdl->origVertices.size(); ++v)
+        grow(mdl->origVertices[v].pos + offset);
+    }
+  };
+
+  if (showModel)
+    growVisible(this, glm::vec3(0.0f));
+
+  // Attached items live in their own local space and are placed at an attachment
+  // point on a bone, so their vertices have to be moved there before they mean
+  // anything in the character's coordinates.
+  for (auto it = begin(); it != end(); ++it)
+  {
+    WoWItem * item = *it;
+    if (!item)
+      continue;
+    for (auto & m : item->models())
+    {
+      WoWModel * im = m.second;
+      if (!im || !im->showModel || im->origVertices.empty())
+        continue;
+
+      glm::vec3 offset(0.0f);
+      const int lookup = (m.first >= 0 && m.first < ATT_MAX) ? attLookup[m.first] : -1;
+      if (lookup > -1 && lookup < (int)atts.size())
+      {
+        const int b = atts[lookup].bone;
+        if (b >= 0 && b < (int)bones.size())
+          offset = glm::vec3(bones[b].mat * glm::vec4(atts[lookup].pos, 1.0f));
+      }
+      growVisible(im, offset);
+    }
+  }
+
+  if (!any)
+    return false;
+  outMin = mn;
+  outMax = mx;
+  return true;
+}
+
 void WoWModel::refreshMerging()
 {
   /*
@@ -3051,6 +3185,7 @@ void WoWModel::refreshMerging()
   replaceTextures.resize(TEXTURE_MAX);
   specialTextures.resize(TEXTURE_MAX);
 
+  mergedGeosetRanges.clear();
   uint mergeIndex = 0;
   for (auto modelsIt : mergedModels)
   {
@@ -3071,6 +3206,7 @@ void WoWModel::refreshMerging()
     // parent's destructor (for (auto it : geosets) delete it) free them a SECOND time
     // -> heap corruption (0xC0000374). Copying also keeps the merged model's originals
     // unmodified by the istart/vstart rebasing for the parent's combined buffers.
+    mergedGeosetRanges[modelsIt] = { nbGeosets, (uint)modelsIt->geosets.size() };
     for (auto it : modelsIt->geosets)
     {
       ModelGeosetHD * g = new ModelGeosetHD(*it);
@@ -3562,6 +3698,10 @@ void WoWModel::refresh()
 
   // refresh merged models
   refreshMerging();
+
+  // Last, on purpose: everything above recomputes visibility from the equipment, so
+  // the item view has to have the final word or it would be undone on every refresh.
+  applyItemFocus();
 
   const auto refreshMs = std::chrono::duration_cast<std::chrono::milliseconds>(
                            std::chrono::steady_clock::now() - refreshStart).count();

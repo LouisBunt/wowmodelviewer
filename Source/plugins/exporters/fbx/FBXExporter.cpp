@@ -297,7 +297,7 @@ bool FBXExporter::exportModel(Model * model, std::wstring target)
 
 void FBXExporter::createMeshes()
 {
-  m_p_meshNode = FBXHeaders::createMesh(m_p_manager, m_p_scene, m_p_model, glm::mat4(1.0f), glm::vec3(0.0f), m_exportComponentRaw);
+  m_p_meshNode = FBXHeaders::createMesh(m_p_manager, m_p_scene, m_p_model, glm::mat4(1.0f), glm::vec3(0.0f), m_exportComponentRaw, &m_vertexRemap);
 
   FbxNode* root_node = m_p_scene->GetRootNode();
   root_node->AddChild(m_p_meshNode);
@@ -382,12 +382,21 @@ void FBXExporter::linkMeshAndSkeleton()
   int i = 0;
   for (auto it : m_p_model->origVertices)
   {
+    // Weights are addressed by CONTROL POINT, and createMesh writes only the vertices a visible
+    // pass uses. A dropped vertex has no control point to weight; passing its model index here
+    // would put the weight on whatever point now carries that number.
+    const int cp = (i < (int)m_vertexRemap.size()) ? m_vertexRemap[i] : i;
+    if (cp < 0)
+    {
+      i++;
+      continue;
+    }
     bool weighted = false;
     for (size_t j = 0; j < 4; j++)
     {
       if (it.weights[j] > 0 && it.bones[j] < clusterCount)
       {
-        m_boneClusters[it.bones[j]]->AddControlPointIndex((int)i, static_cast<double>(it.weights[j]) / 255.0);
+        m_boneClusters[it.bones[j]]->AddControlPointIndex(cp, static_cast<double>(it.weights[j]) / 255.0);
         weighted = true;
       }
     }
@@ -397,7 +406,7 @@ void FBXExporter::linkMeshAndSkeleton()
     if (!weighted && clusterCount > 0)
     {
       const int b = (it.bones[0] < clusterCount) ? it.bones[0] : 0;
-      m_boneClusters[b]->AddControlPointIndex((int)i, 1.0);
+      m_boneClusters[b]->AddControlPointIndex(cp, 1.0);
     }
     i++;
   }
@@ -1516,6 +1525,7 @@ void FBXExporter::reset()
 
   m_filename = L"";
 
+  m_vertexRemap.clear();
   m_boneNodes.clear();
   m_texturesToExport.clear();
   m_textureTints.clear();

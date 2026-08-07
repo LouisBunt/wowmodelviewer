@@ -106,7 +106,7 @@ bool FBXHeaders::createFBXHeaders(FbxString fileVersion, QString l_FileName, Fbx
 }
 
 // Create mesh.
-FbxNode * FBXHeaders::createMesh(FbxManager* &l_manager, FbxScene* &l_scene, WoWModel * model, const glm::mat4 & matrix, const glm::vec3 & offset, bool addUV2)
+FbxNode * FBXHeaders::createMesh(FbxManager* &l_manager, FbxScene* &l_scene, WoWModel * model, const glm::mat4 & matrix, const glm::vec3 & offset, bool addUV2, std::vector<int>* outOldToNew)
 {
   // Create a node for the mesh.
   FbxNode *meshNode = FbxNode::Create(l_manager, qPrintable(model->name()));
@@ -114,8 +114,41 @@ FbxNode * FBXHeaders::createMesh(FbxManager* &l_manager, FbxScene* &l_scene, WoW
   // Create new Matrix Data
   const auto m = glm::scale(glm::vec3(matrix[0][0], matrix[1][1], matrix[2][2]));
 
+  // ---- Which vertices does this export actually use? --------------------------------------
+  // Only the ones a visible pass indexes. Writing all of them regardless left every hidden
+  // geoset behind as loose control points: correct-looking in a viewport (no faces) but real
+  // data in the file -- a focused helmet export carried the character's other ~317k vertices,
+  // which inflates the file, wrecks the object's bounding box and its origin, and makes
+  // Blender report a vertex count that matches nothing on screen.
+  //
+  // The pass gating below must stay identical to the polygon loop's, or an index would map
+  // through to -1 and the polygon would be built from garbage.
+  std::vector<int> oldToNew(model->origVertices.size(), -1);
+  std::vector<int> newToOld;
+  newToOld.reserve(model->origVertices.size());
+  for (size_t i = 0; i < model->passes.size(); i++)
+  {
+    ModelRenderPass * p = model->passes[i];
+    if (!p->init(true))
+      continue;
+    ModelGeosetHD * g = model->geosets[p->geoIndex];
+    for (size_t k = 0; k < g->icount; k++)
+    {
+      const uint32 vi = model->indices[g->istart + k];
+      if (vi < oldToNew.size() && oldToNew[vi] < 0)
+      {
+        oldToNew[vi] = (int)newToOld.size();
+        newToOld.push_back((int)vi);
+      }
+    }
+  }
+  if (outOldToNew)
+    *outOldToNew = oldToNew;
+
   // Create mesh.
-  const auto num_of_vertices = model->origVertices.size();
+  const auto num_of_vertices = newToOld.size();
+  LOG_INFO << "Mesh" << model->name() << "keeps" << (int)num_of_vertices << "of"
+           << (int)model->origVertices.size() << "vertices (visible passes only)";
   FbxMesh* mesh = FbxMesh::Create(l_manager, model->name().toStdString().c_str());
   mesh->InitControlPoints((int)num_of_vertices);
   FbxVector4* vertices = mesh->GetControlPoints();
@@ -163,7 +196,7 @@ FbxNode * FBXHeaders::createMesh(FbxManager* &l_manager, FbxScene* &l_scene, WoW
   LOG_INFO << "Adding main mesh Verts...";
   for (size_t i = 0; i < num_of_vertices; i++)
   {
-    ModelVertex &v = model->origVertices[i];
+    ModelVertex &v = model->origVertices[newToOld[i]];
     glm::vec3 Position = glm::vec3(m * glm::vec4((v.pos + offset), 1.0f));
     vertices[i].Set(Position.x * SCALE_FACTOR, Position.y * SCALE_FACTOR, Position.z * SCALE_FACTOR);
     glm::vec3 vn = glm::normalize(v.normal);
@@ -205,9 +238,9 @@ FbxNode * FBXHeaders::createMesh(FbxManager* &l_manager, FbxScene* &l_scene, WoW
       for (size_t j = 0; j < num_of_faces; j++)
       {
         mesh->BeginPolygon(mtrl_index);
-        mesh->AddPolygon(model->indices[g->istart + j * 3]);
-        mesh->AddPolygon(model->indices[g->istart + j * 3 + 1]);
-        mesh->AddPolygon(model->indices[g->istart + j * 3 + 2]);
+        mesh->AddPolygon(oldToNew[model->indices[g->istart + j * 3]]);
+        mesh->AddPolygon(oldToNew[model->indices[g->istart + j * 3 + 1]]);
+        mesh->AddPolygon(oldToNew[model->indices[g->istart + j * 3 + 2]]);
         mesh->EndPolygon();
       }
 
@@ -239,12 +272,14 @@ FbxNode * FBXHeaders::createMesh(FbxManager* &l_manager, FbxScene* &l_scene, WoW
       const size_t nf = g->icount / 3;
       for (size_t j = 0; j < nf; j++)
       {
-        const uint32 a = model->indices[g->istart + j * 3];
-        const uint32 b = model->indices[g->istart + j * 3 + 1];
-        const uint32 c = model->indices[g->istart + j * 3 + 2];
-        const ModelVertex & v0 = model->origVertices[a];
-        const ModelVertex & v1 = model->origVertices[b];
-        const ModelVertex & v2 = model->origVertices[c];
+        // Accumulate on the EXPORTED index -- tan/bitan are sized to the kept vertices, so
+        // indexing them by the model's own vertex number would run off the end.
+        const int a = oldToNew[model->indices[g->istart + j * 3]];
+        const int b = oldToNew[model->indices[g->istart + j * 3 + 1]];
+        const int c = oldToNew[model->indices[g->istart + j * 3 + 2]];
+        const ModelVertex & v0 = model->origVertices[newToOld[a]];
+        const ModelVertex & v1 = model->origVertices[newToOld[b]];
+        const ModelVertex & v2 = model->origVertices[newToOld[c]];
 
         const glm::vec3 e1 = v1.pos - v0.pos;
         const glm::vec3 e2 = v2.pos - v0.pos;
@@ -266,7 +301,7 @@ FbxNode * FBXHeaders::createMesh(FbxManager* &l_manager, FbxScene* &l_scene, WoW
 
     for (size_t i = 0; i < num_of_vertices; i++)
     {
-      const glm::vec3 n = glm::normalize(model->origVertices[i].normal);
+      const glm::vec3 n = glm::normalize(model->origVertices[newToOld[i]].normal);
       glm::vec3 t = tan[i] - n * glm::dot(n, tan[i]); // Gram-Schmidt against the normal
       const float len = glm::length(t);
       const glm::vec3 tt = (len > 1e-6f) ? (t / len) : glm::vec3(1.0f, 0.0f, 0.0f);
