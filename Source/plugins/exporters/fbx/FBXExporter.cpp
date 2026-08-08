@@ -231,7 +231,9 @@ bool FBXExporter::exportModel(Model * model, std::wstring target)
       LOG_INFO << "Materials successfully created";
     }
 
-    if (wantSkinning)
+    // No body mesh means nothing to skin: in the item view the visible pieces are rigid
+    // props parented to a bone, and there is no character geometry left to weight.
+    if (wantSkinning && m_p_meshNode)
     {
       wmvProgress("STAGE SKIN");
       linkMeshAndSkeleton();
@@ -297,10 +299,24 @@ bool FBXExporter::exportModel(Model * model, std::wstring target)
 
 void FBXExporter::createMeshes()
 {
-  m_p_meshNode = FBXHeaders::createMesh(m_p_manager, m_p_scene, m_p_model, glm::mat4(1.0f), glm::vec3(0.0f), m_exportComponentRaw, &m_vertexRemap);
-
   FbxNode* root_node = m_p_scene->GetRootNode();
-  root_node->AddChild(m_p_meshNode);
+
+  // The item view can hide the character entirely -- focusing a weapon or a shoulder sets
+  // showModel = false and every geoset to display = false. createMesh then finds no visible
+  // pass, and what used to be written was a mesh with zero control points, complete with a
+  // skin deformer and bind pose: an empty object in the scene that carries the character's
+  // name and confuses every importer. The attached-item loop below already skips hidden
+  // models; the main model deserves the same test.
+  if (m_p_model->showModel)
+  {
+    m_p_meshNode = FBXHeaders::createMesh(m_p_manager, m_p_scene, m_p_model, glm::mat4(1.0f), glm::vec3(0.0f), m_exportComponentRaw, &m_vertexRemap);
+    root_node->AddChild(m_p_meshNode);
+  }
+  else
+  {
+    LOG_INFO << "Character body is hidden (item view); exporting the visible items only.";
+    m_p_meshNode = 0;
+  }
 
   for (WoWModel::iterator it = m_p_model->begin(); it != m_p_model->end(); ++it)
   {
@@ -412,7 +428,9 @@ void FBXExporter::linkMeshAndSkeleton()
   }
 
   // set initial matrices
-  FbxAMatrix matrix = m_p_meshNode->EvaluateGlobalTransform();
+  FbxAMatrix matrix;
+  if (m_p_meshNode)
+    matrix = m_p_meshNode->EvaluateGlobalTransform();
   for(auto it : m_boneClusters)
   {
     it->SetTransformMatrix(matrix);
@@ -1236,8 +1254,11 @@ void FBXExporter::createMaterials()
         m_materialMeta.push_back(std::move(meta));
       }
 
-      // Add material to the scene.
-      m_p_meshNode->AddMaterial(material);
+      // Add material to the scene. Guarded because the item view can leave the character
+      // without a mesh node; its passes are invisible then, so this should not be reached
+      // at all, but a null dereference here would take the whole export down.
+      if (m_p_meshNode)
+        m_p_meshNode->AddMaterial(material);
     }
     else if (std::getenv("WMV_MATDUMP"))
     {
