@@ -1,0 +1,7 @@
+{
+  "name" : "STL exporter plugin (3D print)",
+  "internalname" : "stl_exporter",
+  "category" : "exporter",
+  "version" : "0.1",
+  "coreVersion" : "0.8.5"
+}

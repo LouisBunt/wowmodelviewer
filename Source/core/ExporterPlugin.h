@@ -29,6 +29,7 @@
 // Includes / class Declarations
 //--------------------------------------------------------------------
 // STL
+#include <map>
 #include <string>
 #include <vector>
 
@@ -103,6 +104,23 @@ class _EXPORTERPLUGIN_API_ ExporterPlugin : public Plugin
     // Lets the UI surface an actionable message instead of a generic "export failed".
     const std::wstring & lastError() const { return m_lastError; }
 
+    // Human-readable summary of the most recent SUCCESSFUL exportModel(): what was written and
+    // what the caller should know about it (the STL exporter reports the measured size and
+    // the warnings a slicer would otherwise be the first to raise). Empty for exporters that
+    // have nothing to say.
+    const std::wstring & lastReport() const { return m_lastReport; }
+
+    // Free-form per-export settings for exporters that need more than the four toggles above,
+    // without a new virtual per option (which would break every plugin built against the old
+    // vtable). Keys are exporter-specific ("print.height_mm" for the STL exporter); unknown
+    // keys are ignored, and a missing key yields the exporter's own default via parameter().
+    void setParameter(const std::wstring & key, const std::wstring & value) { m_parameters[key] = value; }
+    std::wstring parameter(const std::wstring & key, const std::wstring & fallback = std::wstring()) const
+    {
+      const auto it = m_parameters.find(key);
+      return (it == m_parameters.end()) ? fallback : it->second;
+    }
+
     // Read-only forensic diagnostic: re-import an existing exported file and log per-mesh detail
     // (vertex count, weighted-vertex count, influencing bones, skin cluster count, parent node,
     // bind-pose). Default no-op; the FBX exporter overrides it. Drives the -fbxinspect harness.
@@ -166,6 +184,12 @@ class _EXPORTERPLUGIN_API_ ExporterPlugin : public Plugin
 
     // Set by exporters when exportModel() fails, read by the UI via lastError().
     std::wstring m_lastError;
+
+    // Set by exporters when exportModel() succeeds, read by the UI via lastReport().
+    std::wstring m_lastReport;
+
+    // See setParameter().
+    std::map<std::wstring, std::wstring> m_parameters;
 
   private :
     // Constants / Enums
