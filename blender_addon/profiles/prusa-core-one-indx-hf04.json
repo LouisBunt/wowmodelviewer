@@ -1,0 +1,21 @@
+{
+  "_kommentar": [
+    "Druckprofil fuer den Blender-Operator 'Druckprofil laden'.",
+    "Prusa CORE One INDX 8T, 0.4-HF-Duese, gemessen an PrusaSlicer 2.9.6:",
+    "bed_shape = 0x0,248x0,248x205,0x205 und max_print_height = 270.",
+    "Die drei verfahrensfoermigen Felder beschreiben Schmelzschichten, ohne",
+    "es beim Namen zu nennen: Ueberhaenge ab 45 Grad brauchen Stuetzen, keine",
+    "Kippung noetig, keine Austrittsloecher (es wird massiv gedruckt)."
+  ],
+  "version": 1,
+  "profile": {
+    "build_x_mm": 248.0,
+    "build_y_mm": 205.0,
+    "build_z_mm": 270.0,
+    "escape_hole_mm": 0.0,
+    "feature_mm": 0.4,
+    "overhang_deg": 45.0,
+    "tilt_deg": 0.0,
+    "wall_mm": 0.0
+  }
+}
